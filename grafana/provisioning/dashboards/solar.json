@@ -52,7 +52,7 @@
       "targets": [
         {
           "datasource": { "type": "influxdb", "uid": "influxdb" },
-          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r._field == \"ac_power_total\")\n  |> last()\n  |> group()\n  |> sum()",
+          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r._field == \"ac_power_total\")\n  |> filter(fn: (r) => exists r.inverter)\n  |> last()\n  |> group()\n  |> sum()",
           "refId": "A"
         }
       ],
@@ -110,7 +110,7 @@
       "targets": [
         {
           "datasource": { "type": "influxdb", "uid": "influxdb" },
-          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r._field == \"yield_total\")\n  |> last()\n  |> group()\n  |> sum()",
+          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r._field == \"yield_total\")\n  |> filter(fn: (r) => exists r.inverter)\n  |> last()\n  |> group()\n  |> sum()",
           "refId": "A"
         }
       ],
@@ -169,7 +169,7 @@
       "targets": [
         {
           "datasource": { "type": "influxdb", "uid": "influxdb" },
-          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r._field == \"yield_total\")\n  |> last()\n  |> group()\n  |> sum()\n  |> map(fn: (r) => ({r with _value: r._value * ${co2_factor} / 1000.0}))",
+          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r._field == \"yield_total\")\n  |> filter(fn: (r) => exists r.inverter)\n  |> last()\n  |> group()\n  |> sum()\n  |> map(fn: (r) => ({r with _value: r._value * ${co2_factor} / 1000.0}))",
           "refId": "A"
         }
       ],
@@ -230,12 +230,12 @@
       "targets": [
         {
           "datasource": { "type": "influxdb", "uid": "influxdb" },
-          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r.inverter == \"piko_15\" or not exists r.inverter)\n  |> filter(fn: (r) => r._field == \"status\")\n  |> last()",
+          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r.inverter == \"piko_15\" or not exists r.inverter)\n  |> drop(columns: [\"inverter\"])\n  |> group(columns: [\"_field\"])\n  |> filter(fn: (r) => r._field == \"status\")\n  |> last()",
           "refId": "A"
         },
         {
           "datasource": { "type": "influxdb", "uid": "influxdb" },
-          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r.inverter == \"piko_15\" or not exists r.inverter)\n  |> filter(fn: (r) => r._field == \"ac_power_total\")\n  |> last()\n  |> map(fn: (r) => ({r with _value: r._value / 15000.0 * 100.0}))",
+          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r.inverter == \"piko_15\" or not exists r.inverter)\n  |> drop(columns: [\"inverter\"])\n  |> group(columns: [\"_field\"])\n  |> filter(fn: (r) => r._field == \"ac_power_total\")\n  |> last()\n  |> map(fn: (r) => ({r with _value: r._value / 15000.0 * 100.0}))",
           "refId": "B",
           "hide": true
         }
@@ -334,7 +334,7 @@
       "targets": [
         {
           "datasource": { "type": "influxdb", "uid": "influxdb" },
-          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r.inverter == \"piko_15\" or not exists r.inverter)\n  |> filter(fn: (r) => r._field == \"ac_power_total\")",
+          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r.inverter == \"piko_15\" or not exists r.inverter)\n  |> drop(columns: [\"inverter\"])\n  |> group(columns: [\"_field\"])\n  |> filter(fn: (r) => r._field == \"ac_power_total\")",
           "refId": "A"
         },
         {
@@ -401,7 +401,7 @@
       "targets": [
         {
           "datasource": { "type": "influxdb", "uid": "influxdb" },
-          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r.inverter == \"piko_15\" or not exists r.inverter)\n  |> filter(fn: (r) => r._field == \"dc_power_string1\")\n  |> last()",
+          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r.inverter == \"piko_15\" or not exists r.inverter)\n  |> drop(columns: [\"inverter\"])\n  |> group(columns: [\"_field\"])\n  |> filter(fn: (r) => r._field == \"dc_power_string1\")\n  |> last()",
           "refId": "A"
         }
       ],
@@ -437,7 +437,7 @@
       "targets": [
         {
           "datasource": { "type": "influxdb", "uid": "influxdb" },
-          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r.inverter == \"piko_15\" or not exists r.inverter)\n  |> filter(fn: (r) => r._field == \"dc_power_string2\")\n  |> last()",
+          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r.inverter == \"piko_15\" or not exists r.inverter)\n  |> drop(columns: [\"inverter\"])\n  |> group(columns: [\"_field\"])\n  |> filter(fn: (r) => r._field == \"dc_power_string2\")\n  |> last()",
           "refId": "A"
         }
       ],
@@ -473,7 +473,7 @@
       "targets": [
         {
           "datasource": { "type": "influxdb", "uid": "influxdb" },
-          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r.inverter == \"piko_15\" or not exists r.inverter)\n  |> filter(fn: (r) => r._field == \"dc_power_string3\")\n  |> last()",
+          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r.inverter == \"piko_15\" or not exists r.inverter)\n  |> drop(columns: [\"inverter\"])\n  |> group(columns: [\"_field\"])\n  |> filter(fn: (r) => r._field == \"dc_power_string3\")\n  |> last()",
           "refId": "A"
         }
       ],
@@ -509,7 +509,7 @@
       "targets": [
         {
           "datasource": { "type": "influxdb", "uid": "influxdb" },
-          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r.inverter == \"piko_15\" or not exists r.inverter)\n  |> filter(fn: (r) => r._field == \"dc_voltage_string1\" or r._field == \"dc_voltage_string2\" or r._field == \"dc_voltage_string3\")",
+          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r.inverter == \"piko_15\" or not exists r.inverter)\n  |> drop(columns: [\"inverter\"])\n  |> group(columns: [\"_field\"])\n  |> filter(fn: (r) => r._field == \"dc_voltage_string1\" or r._field == \"dc_voltage_string2\" or r._field == \"dc_voltage_string3\")",
           "refId": "A"
         }
       ],
@@ -554,7 +554,7 @@
       "targets": [
         {
           "datasource": { "type": "influxdb", "uid": "influxdb" },
-          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r.inverter == \"piko_15\" or not exists r.inverter)\n  |> filter(fn: (r) => r._field == \"dc_current_string1\" or r._field == \"dc_current_string2\" or r._field == \"dc_current_string3\")",
+          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r.inverter == \"piko_15\" or not exists r.inverter)\n  |> drop(columns: [\"inverter\"])\n  |> group(columns: [\"_field\"])\n  |> filter(fn: (r) => r._field == \"dc_current_string1\" or r._field == \"dc_current_string2\" or r._field == \"dc_current_string3\")",
           "refId": "A"
         }
       ],
@@ -608,7 +608,7 @@
       "targets": [
         {
           "datasource": { "type": "influxdb", "uid": "influxdb" },
-          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r.inverter == \"piko_15\" or not exists r.inverter)\n  |> filter(fn: (r) => r._field == \"ac_power_l1\")\n  |> last()",
+          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r.inverter == \"piko_15\" or not exists r.inverter)\n  |> drop(columns: [\"inverter\"])\n  |> group(columns: [\"_field\"])\n  |> filter(fn: (r) => r._field == \"ac_power_l1\")\n  |> last()",
           "refId": "A"
         }
       ],
@@ -637,7 +637,7 @@
       "targets": [
         {
           "datasource": { "type": "influxdb", "uid": "influxdb" },
-          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r.inverter == \"piko_15\" or not exists r.inverter)\n  |> filter(fn: (r) => r._field == \"ac_power_l2\")\n  |> last()",
+          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r.inverter == \"piko_15\" or not exists r.inverter)\n  |> drop(columns: [\"inverter\"])\n  |> group(columns: [\"_field\"])\n  |> filter(fn: (r) => r._field == \"ac_power_l2\")\n  |> last()",
           "refId": "A"
         }
       ],
@@ -666,7 +666,7 @@
       "targets": [
         {
           "datasource": { "type": "influxdb", "uid": "influxdb" },
-          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r.inverter == \"piko_15\" or not exists r.inverter)\n  |> filter(fn: (r) => r._field == \"ac_power_l3\")\n  |> last()",
+          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r.inverter == \"piko_15\" or not exists r.inverter)\n  |> drop(columns: [\"inverter\"])\n  |> group(columns: [\"_field\"])\n  |> filter(fn: (r) => r._field == \"ac_power_l3\")\n  |> last()",
           "refId": "A"
         }
       ],
@@ -695,7 +695,7 @@
       "targets": [
         {
           "datasource": { "type": "influxdb", "uid": "influxdb" },
-          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r.inverter == \"piko_15\" or not exists r.inverter)\n  |> filter(fn: (r) => r._field == \"grid_frequency\")\n  |> last()",
+          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r.inverter == \"piko_15\" or not exists r.inverter)\n  |> drop(columns: [\"inverter\"])\n  |> group(columns: [\"_field\"])\n  |> filter(fn: (r) => r._field == \"grid_frequency\")\n  |> last()",
           "refId": "A"
         }
       ],
@@ -725,7 +725,7 @@
       "targets": [
         {
           "datasource": { "type": "influxdb", "uid": "influxdb" },
-          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r.inverter == \"piko_15\" or not exists r.inverter)\n  |> filter(fn: (r) => r._field == \"ac_voltage_l1\" or r._field == \"ac_voltage_l2\" or r._field == \"ac_voltage_l3\")",
+          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r.inverter == \"piko_15\" or not exists r.inverter)\n  |> drop(columns: [\"inverter\"])\n  |> group(columns: [\"_field\"])\n  |> filter(fn: (r) => r._field == \"ac_voltage_l1\" or r._field == \"ac_voltage_l2\" or r._field == \"ac_voltage_l3\")",
           "refId": "A"
         }
       ],
@@ -1240,7 +1240,7 @@
       "targets": [
         {
           "datasource": { "type": "influxdb", "uid": "influxdb" },
-          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r.inverter == \"piko_15\" or not exists r.inverter)\n  |> filter(fn: (r) => r._field == \"self_consumption_daily\")\n  |> last()",
+          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r.inverter == \"piko_15\" or not exists r.inverter)\n  |> drop(columns: [\"inverter\"])\n  |> group(columns: [\"_field\"])\n  |> filter(fn: (r) => r._field == \"self_consumption_daily\")\n  |> last()",
           "refId": "A"
         }
       ],
@@ -1269,7 +1269,7 @@
       "targets": [
         {
           "datasource": { "type": "influxdb", "uid": "influxdb" },
-          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r.inverter == \"piko_15\" or not exists r.inverter)\n  |> filter(fn: (r) => r._field == \"self_consumption_rate_daily\")\n  |> last()",
+          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r.inverter == \"piko_15\" or not exists r.inverter)\n  |> drop(columns: [\"inverter\"])\n  |> group(columns: [\"_field\"])\n  |> filter(fn: (r) => r._field == \"self_consumption_rate_daily\")\n  |> last()",
           "refId": "A"
         }
       ],
