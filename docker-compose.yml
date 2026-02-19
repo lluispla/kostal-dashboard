@@ -40,6 +40,7 @@ services:
     build: ./collector
     environment:
       - INVERTER_IP=${INVERTER_IP}
+      - INVERTER_CI_IP=${INVERTER_CI_IP}
       - POLL_INTERVAL=${POLL_INTERVAL}
       - INFLUXDB_URL=http://influxdb:8086
       - INFLUXDB_TOKEN=${INFLUXDB_TOKEN}
