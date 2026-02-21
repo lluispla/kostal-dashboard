@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Anàlisi Factura - {{ data.invoice.filename }}</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+    <style>
+        :root {
+            --navy: #002B5B;
+            --blue: #0C4DA2;
+            --red: #E63946;
+            --silver: #D4D4D4;
+            --bg: #111217;
+            --card-bg: #1a1b23;
+            --text: #e0e0e0;
+            --green: #2ecc71;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+        }
+        .header {
+            background: linear-gradient(135deg, var(--navy), var(--blue));
+            padding: 2rem 3rem;
+            border-bottom: 3px solid var(--red);
+        }
+        .header h1 { font-size: 1.5rem; color: white; }
+        .header p { color: var(--silver); margin-top: 0.3rem; }
+        .container { max-width: 1200px; margin: 2rem auto; padding: 0 2rem; }
+
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+        .kpi-card {
+            background: var(--card-bg);
+            border: 1px solid #2a2b35;
+            border-radius: 8px;
+            padding: 1.5rem;
+            text-align: center;
+        }
+        .kpi-card .label {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--silver);
+            margin-bottom: 0.5rem;
+        }
+        .kpi-card .value {
+            font-size: 1.8rem;
+            font-weight: 700;
+        }
+        .kpi-card .unit { font-size: 0.9rem; color: var(--silver); }
+        .navy { color: var(--navy); border-top: 3px solid var(--navy); }
+        .blue { color: var(--blue); border-top: 3px solid var(--blue); }
+        .red { color: var(--red); border-top: 3px solid var(--red); }
+        .green { color: var(--green); border-top: 3px solid var(--green); }
+
+        .section {
+            background: var(--card-bg);
+            border: 1px solid #2a2b35;
+            border-radius: 8px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+        }
+        .section h2 {
+            color: var(--silver);
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 1.5rem;
+        }
+
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 0.75rem 1rem; text-align: left; }
+        th {
+            color: var(--silver);
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            border-bottom: 1px solid #2a2b35;
+        }
+        td { border-bottom: 1px solid #1a1b23; }
+        td.num { text-align: right; font-variant-numeric: tabular-nums; }
+        tr:last-child td { border-bottom: none; }
+        tr.total td { font-weight: 700; color: white; border-top: 2px solid var(--blue); }
+
+        .chart-container { max-width: 700px; margin: 0 auto; }
+
+        .suggestion {
+            background: rgba(12, 77, 162, 0.15);
+            border-left: 4px solid var(--blue);
+            padding: 1rem 1.5rem;
+            margin-top: 0.75rem;
+            border-radius: 0 6px 6px 0;
+            line-height: 1.5;
+        }
+
+        .comparison-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+            margin-top: 1rem;
+        }
+        .comp-card {
+            padding: 1.5rem;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .comp-card.fixed { background: rgba(0, 43, 91, 0.3); border: 1px solid var(--navy); }
+        .comp-card.indexed { background: rgba(230, 57, 70, 0.15); border: 1px solid var(--red); }
+        .comp-card .comp-label { font-size: 0.8rem; color: var(--silver); text-transform: uppercase; }
+        .comp-card .comp-value { font-size: 2rem; font-weight: 700; margin: 0.5rem 0; }
+        .comp-card .comp-rate { font-size: 0.85rem; color: var(--silver); }
+
+        .back-link {
+            display: inline-block;
+            margin-bottom: 2rem;
+            color: var(--blue);
+            text-decoration: none;
+            font-weight: 600;
+        }
+        .back-link:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>ANÀLISI FACTURA</h1>
+        <p>{{ data.invoice.filename }}
+           {% if data.invoice.billing_start and data.invoice.billing_end %}
+           &mdash; {{ data.invoice.billing_start }} a {{ data.invoice.billing_end }}
+           {% endif %}
+        </p>
+    </div>
+
+    <div class="container">
+        <a href="/" class="back-link">&larr; Tornar a factures</a>
+
+        <!-- KPI Cards -->
+        <div class="grid">
+            <div class="kpi-card red">
+                <div class="label">Total factura</div>
+                <div class="value">{{ "%.2f"|format(data.invoice.total or data.total_estimate) }} <span class="unit">&euro;</span></div>
+            </div>
+            <div class="kpi-card blue">
+                <div class="label">Consum total</div>
+                <div class="value">{{ "%.0f"|format(data.invoice.total_consumption_kwh) }} <span class="unit">kWh</span></div>
+            </div>
+            <div class="kpi-card navy">
+                <div class="label">Cost efectiu</div>
+                <div class="value">{{ "%.4f"|format(data.effective_eur_kwh) }} <span class="unit">&euro;/kWh</span></div>
+            </div>
+            <div class="kpi-card green">
+                <div class="label">Compensació injecció</div>
+                <div class="value">{{ "%.2f"|format(data.injection_compensation) }} <span class="unit">&euro;</span></div>
+            </div>
+        </div>
+
+        <!-- Consumption breakdown -->
+        <div class="section">
+            <h2>Consum per període</h2>
+            {% if data.invoice.consumption %}
+            <div class="chart-container">
+                <canvas id="consumptionChart"></canvas>
+            </div>
+            <table style="margin-top: 1.5rem;">
+                <thead>
+                    <tr>
+                        <th>Període</th>
+                        <th style="text-align:right">kWh</th>
+                        <th style="text-align:right">Tarifa &euro;/kWh</th>
+                        <th style="text-align:right">Cost &euro;</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for p in ['P1','P2','P3','P4','P5','P6'] %}
+                    {% if p in data.invoice.consumption %}
+                    <tr>
+                        <td>{{ p }}</td>
+                        <td class="num">{{ "%.1f"|format(data.invoice.consumption[p]) }}</td>
+                        <td class="num">{{ "%.6f"|format(data.invoice.rates.get(p, data.fixed_rate)) }}</td>
+                        <td class="num">{{ "%.2f"|format(data.invoice.consumption[p] * data.invoice.rates.get(p, data.fixed_rate)) }}</td>
+                    </tr>
+                    {% endif %}
+                    {% endfor %}
+                    <tr class="total">
+                        <td>Total</td>
+                        <td class="num">{{ "%.1f"|format(data.invoice.total_consumption_kwh) }}</td>
+                        <td class="num">&mdash;</td>
+                        <td class="num">{{ "%.2f"|format(data.fixed_energy_cost) }}</td>
+                    </tr>
+                </tbody>
+            </table>
+            {% else %}
+            <p style="color: var(--silver);">No s'han pogut extreure dades de consum per període del PDF.</p>
+            {% endif %}
+        </div>
+
+        <!-- Cost breakdown -->
+        <div class="section">
+            <h2>Desglossament de costos (estimació)</h2>
+            <table>
+                <tbody>
+                    <tr>
+                        <td>Energia</td>
+                        <td class="num">{{ "%.2f"|format(data.fixed_energy_cost) }} &euro;</td>
+                    </tr>
+                    <tr>
+                        <td>Potència contractada</td>
+                        <td class="num">{{ "%.2f"|format(data.power_cost_estimate) }} &euro;</td>
+                    </tr>
+                    <tr>
+                        <td>Impost electricitat (5.11%)</td>
+                        <td class="num">{{ "%.2f"|format(data.electricity_tax_estimate) }} &euro;</td>
+                    </tr>
+                    <tr>
+                        <td>Lloguer equips + bo social</td>
+                        <td class="num">{{ "%.2f"|format(data.fixed_charges_estimate) }} &euro;</td>
+                    </tr>
+                    <tr>
+                        <td>IVA (21%)</td>
+                        <td class="num">{{ "%.2f"|format(data.iva_estimate) }} &euro;</td>
+                    </tr>
+                    <tr class="total">
+                        <td>Total estimat</td>
+                        <td class="num">{{ "%.2f"|format(data.total_estimate) }} &euro;</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- OMIE comparison -->
+        <div class="section">
+            <h2>Comparació tarifa fixa vs mercat OMIE</h2>
+            {% if data.omie_avg_eur_kwh is not none %}
+            <div class="comparison-grid">
+                <div class="comp-card fixed">
+                    <div class="comp-label">Tarifa fixa</div>
+                    <div class="comp-value" style="color: var(--blue);">{{ "%.2f"|format(data.fixed_energy_cost) }} &euro;</div>
+                    <div class="comp-rate">{{ "%.4f"|format(data.fixed_rate) }} &euro;/kWh</div>
+                </div>
+                <div class="comp-card indexed">
+                    <div class="comp-label">Tarifa indexada OMIE</div>
+                    <div class="comp-value" style="color: var(--red);">{{ "%.2f"|format(data.omie_energy_cost) }} &euro;</div>
+                    <div class="comp-rate">{{ "%.4f"|format(data.omie_avg_eur_kwh) }} &euro;/kWh (mitjana)</div>
+                </div>
+            </div>
+            {% if data.savings_vs_omie is not none %}
+            <div style="text-align: center; margin-top: 1.5rem;">
+                {% if data.savings_vs_omie > 0 %}
+                <p style="font-size: 1.2rem; color: var(--red);">La tarifa fixa ha costat <strong>{{ "%.2f"|format(data.savings_vs_omie) }} &euro; més</strong> que l'indexada</p>
+                {% else %}
+                <p style="font-size: 1.2rem; color: var(--green);">La tarifa fixa ha estalviat <strong>{{ "%.2f"|format(data.savings_vs_omie|abs) }} &euro;</strong> respecte l'indexada</p>
+                {% endif %}
+            </div>
+            {% endif %}
+            {% else %}
+            <p style="color: var(--silver);">No hi ha dades OMIE disponibles per al període de facturació. Les dades OMIE es recullen automàticament a partir de l'activació del col·lector.</p>
+            {% endif %}
+        </div>
+
+        <!-- Suggestions -->
+        {% if data.suggestions %}
+        <div class="section">
+            <h2>Suggeriments d'optimització</h2>
+            {% for s in data.suggestions %}
+            <div class="suggestion">{{ s }}</div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+
+    {% if data.invoice.consumption %}
+    <script>
+        const periods = {{ data.invoice.consumption.keys()|list|tojson }};
+        const values = {{ data.invoice.consumption.values()|list|tojson }};
+
+        new Chart(document.getElementById('consumptionChart'), {
+            type: 'bar',
+            data: {
+                labels: periods,
+                datasets: [{
+                    label: 'kWh',
+                    data: values,
+                    backgroundColor: [
+                        '#E63946', '#0C4DA2', '#002B5B',
+                        '#1a6bba', '#4a8fd4', '#D4D4D4'
+                    ],
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { display: false },
+                    title: {
+                        display: true,
+                        text: 'Consum per període (kWh)',
+                        color: '#D4D4D4',
+                        font: { size: 14 }
+                    }
+                },
+                scales: {
+                    x: { ticks: { color: '#D4D4D4' }, grid: { display: false } },
+                    y: {
+                        ticks: { color: '#D4D4D4' },
+                        grid: { color: 'rgba(212,212,212,0.1)' }
+                    }
+                }
+            }
+        });
+    </script>
+    {% endif %}
+</body>
+</html>

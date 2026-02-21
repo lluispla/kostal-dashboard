@@ -1,0 +1,108 @@
+{
+  "tariff": "3.0TD",
+  "supplier": "Iberdrola",
+  "energy": {
+    "base_rate_eur_kwh": 0.1197,
+    "discount_pct": 0.0,
+    "effective_rate_eur_kwh": 0.1197,
+    "rates_eur_kwh": {
+      "P1": 0.1197,
+      "P2": 0.1197,
+      "P3": 0.1197,
+      "P4": 0.1197,
+      "P5": 0.1197,
+      "P6": 0.1197
+    }
+  },
+  "power_charges_eur_kw_day": {
+    "P1": 0.060903,
+    "P2": 0.036886,
+    "P3": 0.017573,
+    "P4": 0.017573,
+    "P5": 0.017573,
+    "P6": 0.006065
+  },
+  "contracted_power_kw": {
+    "P1": 36.0,
+    "P2": 36.0,
+    "P3": 36.0,
+    "P4": 40.0,
+    "P5": 40.0,
+    "P6": 69.0
+  },
+  "taxes": {
+    "electricity_tax_pct": 5.11,
+    "iva_pct": 21.0
+  },
+  "fixed_charges_eur_day": {
+    "equipment_rental": 1.64,
+    "bono_social": 0.019
+  },
+  "injection": {
+    "price_eur_kwh": 0.05
+  },
+  "indexed_tariff": {
+    "peajes_eur_kwh": {
+      "P1": 0.010847,
+      "P2": 0.008393,
+      "P3": 0.005765,
+      "P4": 0.003156,
+      "P5": 0.001948,
+      "P6": 0.00117
+    },
+    "cargos_eur_kwh": {
+      "P1": 0.039558,
+      "P2": 0.026048,
+      "P3": 0.012693,
+      "P4": 0.004536,
+      "P5": 0.003086,
+      "P6": 0.001688
+    },
+    "margin_comercialitzadora_eur_kwh": 0.01
+  },
+  "period_hours": {
+    "P1": {
+      "weekday": [
+        "10-14"
+      ],
+      "months": "1-12"
+    },
+    "P2": {
+      "weekday": [
+        "8-10",
+        "14-18"
+      ],
+      "months": "1-12"
+    },
+    "P3": {
+      "weekday": [
+        "18-22"
+      ],
+      "months": "1-12"
+    },
+    "P4": {
+      "weekday": [
+        "8-10",
+        "14-18"
+      ],
+      "saturday": true,
+      "months": "1-12"
+    },
+    "P5": {
+      "weekday": [
+        "0-8",
+        "22-24"
+      ],
+      "saturday": [
+        "0-8",
+        "18-24"
+      ],
+      "months": "1-12"
+    },
+    "P6": {
+      "weekend": true,
+      "holidays": true,
+      "months": "1-12"
+    }
+  }
+}

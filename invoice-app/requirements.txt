@@ -1,0 +1,4 @@
+flask
+pymupdf
+influxdb-client
+requests

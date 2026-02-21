@@ -1,0 +1,26 @@
+{
+  "offers": [
+    {
+      "id": "iberdrola-fixa-actual",
+      "supplier": "Iberdrola",
+      "name": "Tarifa fixa actual",
+      "type": "fixed",
+      "is_current": true,
+      "energy_eur_kwh": {
+        "P1": 0.153962, "P2": 0.153962, "P3": 0.153962,
+        "P4": 0.153962, "P5": 0.153962, "P6": 0.153962
+      },
+      "margin_eur_kwh": null,
+      "power_charges_eur_kw_day": {
+        "P1": 0.060903, "P2": 0.036886, "P3": 0.017573,
+        "P4": 0.017573, "P5": 0.017573, "P6": 0.006065
+      },
+      "contracted_power_kw": {
+        "P1": 69, "P2": 69, "P3": 69, "P4": 69, "P5": 69, "P6": 69
+      },
+      "injection_eur_kwh": 0.05,
+      "fixed_charges_eur_day": 1.659,
+      "discount_energy_pct": 0
+    }
+  ]
+}

@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Factures Solar - Binomi Produccions</title>
+    <style>
+        :root {
+            --navy: #002B5B;
+            --blue: #0C4DA2;
+            --red: #E63946;
+            --silver: #D4D4D4;
+            --bg: #111217;
+            --card-bg: #1a1b23;
+            --text: #e0e0e0;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+        }
+        .header {
+            background: linear-gradient(135deg, var(--navy), var(--blue));
+            padding: 2rem 3rem;
+            border-bottom: 3px solid var(--red);
+        }
+        .header h1 {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: white;
+            letter-spacing: 0.05em;
+        }
+        .header p { color: var(--silver); margin-top: 0.3rem; }
+        .container { max-width: 1000px; margin: 2rem auto; padding: 0 2rem; }
+        .flash-success {
+            background: rgba(12, 77, 162, 0.2);
+            border-left: 4px solid var(--blue);
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+            border-radius: 4px;
+        }
+        .flash-error {
+            background: rgba(230, 57, 70, 0.2);
+            border-left: 4px solid var(--red);
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+            border-radius: 4px;
+        }
+        .upload-card {
+            background: var(--card-bg);
+            border: 1px solid #2a2b35;
+            border-radius: 8px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+        }
+        .upload-card h2 {
+            color: var(--silver);
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 1.5rem;
+        }
+        .upload-form {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .file-input {
+            flex: 1;
+            min-width: 200px;
+        }
+        .file-input input[type="file"] {
+            width: 100%;
+            padding: 0.8rem;
+            background: var(--bg);
+            border: 2px dashed #3a3b45;
+            border-radius: 6px;
+            color: var(--text);
+            cursor: pointer;
+        }
+        .file-input input[type="file"]:hover {
+            border-color: var(--blue);
+        }
+        .btn {
+            padding: 0.8rem 2rem;
+            border: none;
+            border-radius: 6px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-primary {
+            background: var(--blue);
+            color: white;
+        }
+        .btn-primary:hover { background: var(--navy); }
+        .invoices-list { margin-top: 1rem; }
+        .invoices-list h2 {
+            color: var(--silver);
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 1rem;
+        }
+        .invoice-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 1.5rem;
+            background: var(--card-bg);
+            border: 1px solid #2a2b35;
+            border-radius: 6px;
+            margin-bottom: 0.5rem;
+            transition: border-color 0.2s;
+        }
+        .invoice-row:hover { border-color: var(--blue); }
+        .invoice-row .info { flex: 1; }
+        .invoice-row .name { font-weight: 600; color: white; }
+        .invoice-row .period { color: var(--silver); font-size: 0.85rem; margin-top: 0.2rem; }
+        .invoice-row .total {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--red);
+            margin-right: 1.5rem;
+        }
+        .invoice-row a {
+            color: var(--blue);
+            text-decoration: none;
+            font-weight: 600;
+        }
+        .invoice-row a:hover { text-decoration: underline; }
+        .empty-state {
+            text-align: center;
+            padding: 3rem;
+            color: #666;
+        }
+        .back-link {
+            display: inline-block;
+            margin-top: 2rem;
+            color: var(--silver);
+            text-decoration: none;
+            font-size: 0.9rem;
+        }
+        .back-link:hover { color: white; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>FACTURES SOLAR</h1>
+        <p>Binomi Produccions SL &mdash; Planta Solar 65 kW</p>
+    </div>
+    <div class="container">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for category, message in messages %}
+        <div class="flash-{{ category }}">{{ message }}</div>
+        {% endfor %}
+        {% endwith %}
+
+        <div class="upload-card">
+            <h2>Pujar factura Iberdrola (PDF)</h2>
+            <form action="/upload" method="post" enctype="multipart/form-data" class="upload-form">
+                <div class="file-input">
+                    <input type="file" name="file" accept=".pdf">
+                </div>
+                <button type="submit" class="btn btn-primary">Analitzar</button>
+            </form>
+        </div>
+
+        <div class="invoices-list">
+            <h2>Factures analitzades</h2>
+            {% if invoices %}
+                {% for inv in invoices %}
+                <div class="invoice-row">
+                    <div class="info">
+                        <div class="name">{{ inv.filename }}</div>
+                        <div class="period">
+                            {% if inv.billing_start and inv.billing_end %}
+                                {{ inv.billing_start }} &mdash; {{ inv.billing_end }}
+                                ({{ inv.billing_days }} dies)
+                            {% else %}
+                                Periode no detectat
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% if inv.total %}
+                    <div class="total">{{ "%.2f"|format(inv.total) }} &euro;</div>
+                    {% endif %}
+                    <a href="/analysis/{{ inv.filename.replace('.pdf', '.json') }}">Veure anàlisi &rarr;</a>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="empty-state">
+                    <p>Cap factura analitzada encara. Puja un PDF d'Iberdrola per començar.</p>
+                </div>
+            {% endif %}
+        </div>
+
+        <a href="http://localhost:3000/d/solar/planta-solar?kiosk&theme=dark" class="back-link">&larr; Tornar al dashboard</a>
+    </div>
+</body>
+</html>
