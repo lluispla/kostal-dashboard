@@ -1,3 +1,44 @@
+# Environment and secrets
 .env
+.env.*
+!.env.example
+
+# InfluxDB data
 data/
+
+# Python
 __pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+build/
+*.egg
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+*.log
+
+# Uploaded invoices (runtime data)
+dashboard/invoices/
+invoice-app/invoices/
+
+# Credentials / tokens
+*.pem
+*.key
+*.crt
+*.p12
+credentials.json
+token.json
