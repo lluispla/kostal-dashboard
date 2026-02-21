@@ -6,10 +6,52 @@
     'use strict';
 
     var PERIODS = ['P1', 'P2', 'P3', 'P4', 'P5', 'P6'];
+    var REF_COLOR = '#E67E22';
     var data = window.comparadorData;
 
     // State
     var offers = data.offers.slice();
+
+    // -----------------------------------------------------------------------
+    // Auto-generated indexed reference offers
+    // -----------------------------------------------------------------------
+
+    function buildReferenceOffers() {
+        var currentOffer = null;
+        for (var i = 0; i < offers.length; i++) {
+            if (offers[i].is_current) { currentOffer = offers[i]; break; }
+        }
+
+        var margins = [0.010, 0.020];
+        var refs = [];
+        for (var m = 0; m < margins.length; m++) {
+            var margin = margins[m];
+            var marginLabel = (margin * 1000).toFixed(0);
+            var ref = {
+                id: 'ref-idx-' + marginLabel,
+                supplier: 'Ref. Indexada',
+                name: 'Marge ' + margin.toFixed(3) + ' €/kWh',
+                type: 'indexed',
+                is_current: false,
+                _reference: true,
+                margin_eur_kwh: margin,
+                energy_eur_kwh: null,
+                discount_energy_pct: 0,
+                injection_eur_kwh: 0,
+                fixed_charges_eur_day: currentOffer ? (currentOffer.fixed_charges_eur_day || 0) : 0,
+                contracted_power_kw: currentOffer ? clone(currentOffer.contracted_power_kw) : {},
+                power_charges_eur_kw_day: currentOffer ? clone(currentOffer.power_charges_eur_kw_day) : {}
+            };
+            refs.push(ref);
+        }
+        return refs;
+    }
+
+    // Inject reference offers
+    var refOffers = buildReferenceOffers();
+    for (var ri = 0; ri < refOffers.length; ri++) {
+        offers.push(refOffers[ri]);
+    }
     var currentScenario = 'real';
     var pctByPeriod = clone(data.scenarios.real);
     var totalKwh = data.monthly_kwh || 1000;
@@ -293,6 +335,10 @@
     // Offer cards
     // -----------------------------------------------------------------------
 
+    function isReferenceOffer(offer) {
+        return offer && offer._reference === true;
+    }
+
     function renderOfferCards() {
         var grid = document.getElementById('offers-grid');
         if (!grid) return;
@@ -300,9 +346,24 @@
 
         for (var k = 0; k < offers.length; k++) {
             var offer = offers[k];
+            var isRef = isReferenceOffer(offer);
             var card = document.createElement('div');
-            card.className = 'offer-card' + (offer.is_current ? ' offer-current' : '');
-            var typeLabel = offer.type === 'fixed' ? 'Fixa' : 'Indexada';
+            card.className = 'offer-card'
+                + (offer.is_current ? ' offer-current' : '')
+                + (isRef ? ' offer-reference' : '');
+
+            var typeLabel, typeCls;
+            if (isRef) {
+                typeLabel = 'Referència';
+                typeCls = 'offer-type-reference';
+            } else if (offer.type === 'fixed') {
+                typeLabel = 'Fixa';
+                typeCls = 'offer-type-fixed';
+            } else {
+                typeLabel = 'Indexada';
+                typeCls = 'offer-type-indexed';
+            }
+
             var rateInfo = '';
             if (offer.type === 'fixed' && offer.energy_eur_kwh) {
                 var rates = [];
@@ -320,6 +381,14 @@
                 rateInfo = 'OMIE + ' + ((offer.margin_eur_kwh || 0) * 1000).toFixed(1) + ' \u20ac/MWh';
             }
 
+            var actionsHtml;
+            if (isRef) {
+                actionsHtml = '<span class="ref-note">Generada automàticament</span>';
+            } else {
+                actionsHtml = '<button class="btn-link btn-edit-offer" data-id="' + offer.id + '">Editar</button>'
+                    + (offer.is_current ? '' : '<button class="btn-link btn-delete-offer" data-id="' + offer.id + '">Eliminar</button>');
+            }
+
             card.innerHTML =
                 '<div class="offer-card-header">'
                 + '<div>'
@@ -327,7 +396,7 @@
                 + (offer.is_current ? ' <span class="badge-current">Actual</span>' : '')
                 + '<br><span class="offer-name">' + escHtml(offer.name) + '</span>'
                 + '</div>'
-                + '<span class="offer-type-badge offer-type-' + offer.type + '">' + typeLabel + '</span>'
+                + '<span class="offer-type-badge ' + typeCls + '">' + typeLabel + '</span>'
                 + '</div>'
                 + '<div class="offer-card-rate">' + rateInfo + '</div>'
                 + '<div class="offer-card-details">'
@@ -335,8 +404,7 @@
                 + ' &middot; Fixes: ' + (offer.fixed_charges_eur_day || 0).toFixed(3) + ' \u20ac/dia'
                 + '</div>'
                 + '<div class="offer-card-actions">'
-                + '<button class="btn-link btn-edit-offer" data-id="' + offer.id + '">Editar</button>'
-                + (offer.is_current ? '' : '<button class="btn-link btn-delete-offer" data-id="' + offer.id + '">Eliminar</button>')
+                + actionsHtml
                 + '</div>';
             grid.appendChild(card);
         }
@@ -346,6 +414,7 @@
         for (var i = 0; i < editBtns.length; i++) {
             editBtns[i].addEventListener('click', function () {
                 var id = this.dataset.id;
+                if (id.indexOf('ref-idx-') === 0) return;
                 var o = offers.find(function (o) { return o.id === id; });
                 if (o) openOfferForm(o);
             });
@@ -353,7 +422,9 @@
         var delBtns = grid.querySelectorAll('.btn-delete-offer');
         for (var i = 0; i < delBtns.length; i++) {
             delBtns[i].addEventListener('click', function () {
-                deleteOfferApi(this.dataset.id);
+                var id = this.dataset.id;
+                if (id.indexOf('ref-idx-') === 0) return;
+                deleteOfferApi(id);
             });
         }
     }
@@ -363,6 +434,7 @@
     // -----------------------------------------------------------------------
 
     function openOfferForm(offer) {
+        if (offer && isReferenceOffer(offer)) return;
         var modal = document.getElementById('offer-modal');
         modal.style.display = 'flex';
         document.getElementById('modal-title').textContent = offer ? 'Editar oferta' : 'Nova oferta';
@@ -474,6 +546,7 @@
 
     function saveOfferApi(offer) {
         var editId = document.getElementById('form-offer-id').value;
+        if (editId && editId.indexOf('ref-idx-') === 0) return;
         var method = editId ? 'PUT' : 'POST';
         var url = editId ? '/api/ofertes/' + editId : '/api/ofertes';
 
@@ -496,6 +569,7 @@
     }
 
     function deleteOfferApi(id) {
+        if (id && id.indexOf('ref-idx-') === 0) return;
         if (!confirm('Eliminar aquesta oferta?')) return;
         fetch('/api/ofertes/' + id, { method: 'DELETE' })
         .then(function () {
@@ -545,7 +619,9 @@
             var r = results[i];
             labels.push(r.offer.supplier + ' — ' + r.offer.name);
             values.push(Math.round(r.bill.net * 100) / 100);
-            if (r.offer.is_current) {
+            if (isReferenceOffer(r.offer)) {
+                colors.push(REF_COLOR);
+            } else if (r.offer.is_current) {
                 colors.push('#0C4DA2');
             } else if (i === 0) {
                 colors.push('#28a745');
@@ -623,6 +699,7 @@
             var badge = '';
             if (r.offer.id === winnerId) badge += '<span class="winner-badge">Millor preu</span> ';
             if (r.offer.is_current) badge += '<span class="badge-current">Actual</span> ';
+            if (isReferenceOffer(r.offer)) badge += '<span class="badge-reference">Ref. indexada</span> ';
             h += '<th' + cls + '>' + badge
                 + escHtml(r.offer.supplier)
                 + '<br><small>' + escHtml(r.offer.name) + '</small></th>';

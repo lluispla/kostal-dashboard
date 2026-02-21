@@ -301,6 +301,18 @@ body {
 .status-idle  { background: #fff3cd; color: #856404; }
 .status-off   { background: #e9ecef; color: #495057; }
 .status-error { background: #f8d7da; color: #721c24; }
+.overvoltage-badge {
+    display: inline-block;
+    padding: 0.2rem 0.6rem;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    background: #f8d7da;
+    color: #721c24;
+    border: 1px solid var(--red);
+    margin-left: 0.4rem;
+    vertical-align: middle;
+}
 .inv-card .inv-stat {
     display: flex;
     justify-content: space-between;
@@ -769,6 +781,7 @@ body {
 }
 .offer-card:hover { border-color: var(--blue); }
 .offer-card.offer-current { border-left: 4px solid var(--blue); }
+.offer-card.offer-reference { border-left: 4px solid #E67E22; background: #fef9f4; }
 .offer-card-header {
     display: flex;
     justify-content: space-between;
@@ -787,6 +800,7 @@ body {
 }
 .offer-type-fixed { background: #eef3fb; color: var(--blue); }
 .offer-type-indexed { background: #fef0f1; color: var(--red); }
+.offer-type-reference { background: #fdf2e9; color: #E67E22; }
 .badge-current {
     display: inline-block;
     padding: 0.1rem 0.4rem;
@@ -797,6 +811,22 @@ body {
     color: var(--white);
     vertical-align: middle;
     margin-left: 0.3rem;
+}
+.badge-reference {
+    display: inline-block;
+    padding: 0.1rem 0.4rem;
+    border-radius: 3px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    background: #E67E22;
+    color: var(--white);
+    vertical-align: middle;
+    margin-left: 0.3rem;
+}
+.ref-note {
+    font-size: 0.75rem;
+    font-style: italic;
+    color: #E67E22;
 }
 .offer-card-rate {
     font-size: 0.85rem;
@@ -1195,4 +1225,25 @@ body {
     .settings-periods .settings-field { min-width: 65px; }
     .historic-summary { grid-template-columns: repeat(2, 1fr); }
     .historic-chart-wrap { height: 260px; }
+}
+
+/* =========================================================================
+   Estadístiques
+   ========================================================================= */
+
+.data-quality-badge {
+    display: inline-block;
+    background: #d4edda;
+    border: 1px solid var(--green);
+    border-radius: 6px;
+    padding: 0.4rem 1rem;
+    margin-bottom: 1rem;
+    font-size: 0.85rem;
+    color: #155724;
+    font-weight: 600;
+}
+.data-quality-badge.data-quality-warning {
+    background: #fff3cd;
+    border-color: var(--yellow);
+    color: #856404;
 }

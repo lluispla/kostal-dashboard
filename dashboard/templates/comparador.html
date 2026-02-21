@@ -225,6 +225,11 @@
     </div>
 
     <div id="comparison-results">
+        <div class="sensitivity-note" style="margin-bottom: 1rem; border-left-color: #E67E22; background: #fef9f4;">
+            Les barres <strong style="color: #E67E22;">taronja</strong> mostren el cost estimat amb tarifa indexada
+            (OMIE + peatges + c&agrave;rrecs + marge 0.010 i 0.020 &euro;/kWh).
+        </div>
+
         <div class="chart-wrap">
             <h3>Cost net mensual per oferta (EUR)</h3>
             <canvas id="chart-comparison"></canvas>
@@ -248,7 +253,7 @@
 
 {% block scripts %}
 <script>
-    const comparadorData = {{ d|tojson }};
+    var comparadorData = {{ d|tojson }};
 </script>
 <script src="{{ url_for('static', filename='js/comparador.js') }}"></script>
 {% endblock %}
