@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Factures{% endblock %}
+
+{% block header_right %}
+<span>Gestió de factures Iberdrola</span>
+{% endblock %}
+
+{% block content %}
+<div class="upload-card">
+    <h2>Pujar factura Iberdrola (PDF)</h2>
+    <form action="{{ url_for('factures_upload') }}" method="post" enctype="multipart/form-data" class="upload-form">
+        <div class="file-input">
+            <input type="file" name="file" accept=".pdf">
+        </div>
+        <button type="submit" class="btn btn-primary">Analitzar</button>
+    </form>
+</div>
+
+<div class="section">
+    <div class="section-header">
+        <span class="icon">&#128196;</span>
+        <h2>Factures analitzades</h2>
+    </div>
+
+    {% if invoices %}
+        {% for inv in invoices %}
+        <div class="invoice-row">
+            <div class="info">
+                <div class="name">{{ inv.filename }}</div>
+                <div class="period">
+                    {% if inv.billing_start and inv.billing_end %}
+                        {{ inv.billing_start }} &mdash; {{ inv.billing_end }}
+                        ({{ inv.billing_days }} dies)
+                    {% else %}
+                        Període no detectat
+                    {% endif %}
+                </div>
+            </div>
+            {% if inv.total %}
+            <div class="total">{{ "%.2f"|format(inv.total) }} &euro;</div>
+            {% endif %}
+            <a href="{{ url_for('factures_analysis', filename=inv.filename.replace('.pdf', '.json')) }}">Veure anàlisi &rarr;</a>
+        </div>
+        {% endfor %}
+    {% else %}
+        <div class="empty-state">
+            <p>Cap factura analitzada encara. Puja un PDF d'Iberdrola per començar.</p>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

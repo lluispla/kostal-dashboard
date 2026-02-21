@@ -20,28 +20,14 @@ services:
       timeout: 5s
       retries: 5
 
-  grafana:
-    image: grafana/grafana:latest
-    ports:
-      - "3000:3000"
-    volumes:
-      - grafana-data:/var/lib/grafana
-      - ./grafana/provisioning:/etc/grafana/provisioning
-    environment:
-      - GF_SECURITY_ALLOW_EMBEDDING=${GF_SECURITY_ALLOW_EMBEDDING}
-      - GF_AUTH_ANONYMOUS_ENABLED=${GF_AUTH_ANONYMOUS_ENABLED}
-      - GF_AUTH_ANONYMOUS_ORG_ROLE=${GF_AUTH_ANONYMOUS_ORG_ROLE}
-      - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/etc/grafana/provisioning/dashboards/solar.json
-    depends_on:
-      influxdb:
-        condition: service_healthy
-
   collector:
     build: ./collector
     environment:
       - INVERTER_IP=${INVERTER_IP}
       - INVERTER_CI_IP=${INVERTER_CI_IP}
+      - KSEM_IP=${KSEM_IP}
       - POLL_INTERVAL=${POLL_INTERVAL}
+      - OMIE_ENABLED=${OMIE_ENABLED}
       - INFLUXDB_URL=http://influxdb:8086
       - INFLUXDB_TOKEN=${INFLUXDB_TOKEN}
       - INFLUXDB_ORG=${INFLUXDB_ORG}
@@ -51,5 +37,26 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  dashboard:
+    build: ./dashboard
+    ports:
+      - "5000:5000"
+    environment:
+      - INFLUXDB_URL=http://influxdb:8086
+      - INFLUXDB_TOKEN=${INFLUXDB_TOKEN}
+      - INFLUXDB_ORG=${INFLUXDB_ORG}
+      - INFLUXDB_BUCKET=${INFLUXDB_BUCKET}
+      - ELECTRICITY_COST=${ELECTRICITY_COST}
+      - INJECTION_PRICE=${INJECTION_PRICE}
+      - CO2_FACTOR=${CO2_FACTOR}
+    volumes:
+      - ./pricing.json:/app/pricing.json
+      - ./offers.json:/app/offers.json
+      - invoice-data:/app/invoices
+    depends_on:
+      influxdb:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
-  grafana-data:
+  invoice-data:

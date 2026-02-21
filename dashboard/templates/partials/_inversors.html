@@ -1,0 +1,97 @@
+<!-- Inversors — collapsible section -->
+<div class="section">
+    <div class="collapsible-header" id="inv-toggle" onclick="toggleInversors()">
+        <span class="icon">&#9881;</span>
+        <h2 style="font-size:1.15rem; font-weight:700; color:var(--navy); text-transform:uppercase; letter-spacing:0.04em;">
+            Estat inversors
+        </h2>
+        <span class="arrow">&#9654;</span>
+    </div>
+
+    <div class="collapsible-body" id="inv-body">
+        <div class="martini-stripe-thin" style="margin-bottom: 1rem;"></div>
+
+        <div class="inv-grid">
+            <!-- PIKO 15 -->
+            <div class="inv-card">
+                <h4>PIKO 15 (15 kW)</h4>
+                <div style="margin-bottom: 0.75rem;">
+                    <span id="inv-piko15-badge"
+                          class="status-badge {{ 'status-ok' if d.inversors.piko_15.status in (3,4) else ('status-idle' if d.inversors.piko_15.status in (1,2) else ('status-error' if d.inversors.piko_15.status == 5 else 'status-off')) }}">
+                        {{ d.inversors.piko_15.text }}
+                    </span>
+                </div>
+                <div class="inv-stat">
+                    <span>Potència AC</span>
+                    <span class="inv-val" data-field="inversors.piko_15.power_w" data-fmt="0">{{ "%.0f"|format(d.inversors.piko_15.power_w) }} W</span>
+                </div>
+                <div class="inv-stat">
+                    <span>Capacitat</span>
+                    <span class="inv-val" data-field="inversors.piko_15.power_pct" data-fmt="1">{{ "%.1f"|format(d.inversors.piko_15.power_pct) }}%</span>
+                </div>
+            </div>
+
+            <!-- PIKO CI 50 -->
+            <div class="inv-card">
+                <h4>PIKO CI 50 (50 kW)</h4>
+                <div style="margin-bottom: 0.75rem;">
+                    <span id="inv-ci50-badge"
+                          class="status-badge {{ 'status-ok' if d.inversors.piko_ci_50.status in (3,4) else ('status-idle' if d.inversors.piko_ci_50.status in (1,2) else ('status-error' if d.inversors.piko_ci_50.status == 5 else 'status-off')) }}">
+                        {{ d.inversors.piko_ci_50.text }}
+                    </span>
+                </div>
+                <div class="inv-stat">
+                    <span>Potència AC</span>
+                    <span class="inv-val" data-field="inversors.piko_ci_50.power_w" data-fmt="0">{{ "%.0f"|format(d.inversors.piko_ci_50.power_w) }} W</span>
+                </div>
+                <div class="inv-stat">
+                    <span>Capacitat</span>
+                    <span class="inv-val" data-field="inversors.piko_ci_50.power_pct" data-fmt="1">{{ "%.1f"|format(d.inversors.piko_ci_50.power_pct) }}%</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Grid info -->
+        <div class="inv-card" style="margin-bottom: 1rem;">
+            <h4>Xarxa elèctrica</h4>
+            <div class="inv-stat">
+                <span>Freqüència</span>
+                <span class="inv-val" data-field="inversors.frequency" data-fmt="2">{{ "%.2f"|format(d.inversors.frequency) }} Hz</span>
+            </div>
+        </div>
+
+        <!-- Phase table -->
+        <div class="inv-card">
+            <h4>Potència per fase (KSEM)</h4>
+            <table class="phase-table">
+                <thead>
+                    <tr>
+                        <th>Fase</th>
+                        <th>Tensió (V)</th>
+                        <th>Corrent (A)</th>
+                        <th>Potència (W)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for phase in ['l1', 'l2', 'l3'] %}
+                    <tr>
+                        <td>{{ phase|upper }}</td>
+                        <td data-field="inversors.phases.{{ phase }}.voltage" data-fmt="1">{{ "%.1f"|format(d.inversors.phases[phase].voltage) }}</td>
+                        <td data-field="inversors.phases.{{ phase }}.current" data-fmt="1">{{ "%.1f"|format(d.inversors.phases[phase].current) }}</td>
+                        <td data-field="inversors.phases.{{ phase }}.power" data-fmt="0">{{ "%.0f"|format(d.inversors.phases[phase].power) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+function toggleInversors() {
+    const header = document.getElementById('inv-toggle');
+    const body = document.getElementById('inv-body');
+    header.classList.toggle('open');
+    body.classList.toggle('open');
+}
+</script>

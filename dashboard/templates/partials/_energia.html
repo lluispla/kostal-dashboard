@@ -1,0 +1,86 @@
+<!-- Energia — 4 KPI cards + power curve + daily yield chart -->
+<div class="section">
+    <div class="section-header">
+        <span class="icon">&#9889;</span>
+        <h2>Energia</h2>
+    </div>
+
+    <div class="kpi-grid">
+        <!-- Generació planta ara -->
+        <div class="kpi-card">
+            <div class="label">Generació planta ara</div>
+            <div class="description">Potència AC total dels dos inversors (PIKO 15 + CI 50)</div>
+            <div class="value val-blue">
+                <span data-field="energia.plant_power_w" data-fmt="0">{{ "%.0f"|format(d.energia.plant_power_w) }}</span>
+                <span class="unit">W</span>
+            </div>
+        </div>
+
+        <!-- Consum negoci ara -->
+        <div class="kpi-card">
+            <div class="label">Consum negoci ara</div>
+            <div class="description">Potència consumida al local (autoconsum + xarxa)</div>
+            <div class="value val-navy">
+                <span data-field="energia.consumption_w" data-fmt="0">{{ "%.0f"|format(d.energia.consumption_w) }}</span>
+                <span class="unit">W</span>
+            </div>
+        </div>
+
+        <!-- Flux xarxa ara -->
+        <div class="kpi-card">
+            <div class="label">Flux xarxa ara</div>
+            <div class="description">Positiu = important de xarxa, negatiu = exportant excedent</div>
+            <div class="value {% if d.energia.grid_flow_w >= 0 %}val-red{% else %}val-green{% endif %}">
+                <span data-field="energia.grid_flow_w" data-fmt="0">{{ "%.0f"|format(d.energia.grid_flow_w) }}</span>
+                <span class="unit">W</span>
+            </div>
+        </div>
+
+        <!-- Taxa autoconsum -->
+        <div class="kpi-card">
+            <div class="label">Taxa autoconsum avui</div>
+            <div class="description">Percentatge d'energia solar consumida localment</div>
+            <div class="value val-blue">
+                <span data-field="energia.self_consumption_rate" data-fmt="1">{{ "%.1f"|format(d.energia.self_consumption_rate) }}</span>
+                <span class="unit">%</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- EMA toggle for power charts -->
+    <div style="margin-bottom: 0.75rem;">
+        <button class="range-btn" id="dash-toggle-ema" onclick="this.classList.toggle('active'); toggleDashEma();">EMA</button>
+    </div>
+
+    <!-- Power curves — 3 separate charts -->
+    <div class="chart-wrap dash-chart-wrap" id="dash-wrap-gen">
+        <h3>Generació solar — avui</h3>
+        <button class="chart-btn fullscreen-btn" onclick="toggleDashFullscreen('dash-wrap-gen')">&#x26F6;</button>
+        <div style="height: 180px;">
+            <canvas id="chart-generation"></canvas>
+        </div>
+    </div>
+    <div class="chart-wrap dash-chart-wrap" id="dash-wrap-cons">
+        <h3>Consum del negoci — avui</h3>
+        <button class="chart-btn fullscreen-btn" onclick="toggleDashFullscreen('dash-wrap-cons')">&#x26F6;</button>
+        <div style="height: 180px;">
+            <canvas id="chart-consumption"></canvas>
+        </div>
+    </div>
+    <div class="chart-wrap dash-chart-wrap" id="dash-wrap-grid">
+        <h3>Flux xarxa — avui (positiu = importació, negatiu = exportació excedent)</h3>
+        <button class="chart-btn fullscreen-btn" onclick="toggleDashFullscreen('dash-wrap-grid')">&#x26F6;</button>
+        <div style="height: 180px;">
+            <canvas id="chart-grid"></canvas>
+        </div>
+    </div>
+
+    <!-- Daily yield 30d -->
+    <div class="chart-wrap dash-chart-wrap" id="dash-wrap-yield">
+        <h3>Energia diària — últims 30 dies</h3>
+        <button class="chart-btn fullscreen-btn" onclick="toggleDashFullscreen('dash-wrap-yield')">&#x26F6;</button>
+        <div style="height: 220px;">
+            <canvas id="chart-yield"></canvas>
+        </div>
+    </div>
+</div>

@@ -1,1302 +1,1032 @@
 {
+  "id": null,
   "uid": "solar",
   "title": "Planta Solar",
-  "description": "Monitorització en temps real de la planta fotovoltaica",
-  "tags": ["solar", "kostal", "piko"],
-  "style": "dark",
+  "description": "Dashboard econòmic — Binomi Produccions SL — 65 kW",
+  "tags": ["solar", "economia"],
   "timezone": "Europe/Madrid",
   "editable": true,
   "graphTooltip": 1,
   "liveNow": true,
-  "refresh": "30s",
   "schemaVersion": 39,
-  "time": { "from": "now/d", "to": "now" },
-  "fiscalYearStartMonth": 0,
-  "annotations": { "list": [] },
-  "links": [],
+  "refresh": "30s",
+  "time": {
+    "from": "now/d",
+    "to": "now"
+  },
+  "fiscalYearStartMonth": 1,
   "templating": {
     "list": [
       {
-        "name": "co2_factor",
+        "name": "electricity_cost",
+        "label": "Cost electricitat (€/kWh)",
         "type": "textbox",
-        "label": "Factor CO₂ (kg/kWh)",
-        "current": { "selected": false, "text": "0.170", "value": "0.170" },
-        "query": "0.170",
+        "current": { "value": "0.154", "text": "0.154", "selected": false },
+        "query": "0.154",
         "hide": 0
       },
       {
-        "name": "electricity_cost",
+        "name": "injection_price",
+        "label": "Preu injecció (€/kWh)",
         "type": "textbox",
-        "label": "Cost electricitat (€/kWh)",
-        "current": { "selected": false, "text": "0.15", "value": "0.15" },
-        "query": "0.15",
+        "current": { "value": "0.05", "text": "0.05", "selected": false },
+        "query": "0.05",
         "hide": 0
+      },
+      {
+        "name": "co2_factor",
+        "label": "Factor CO2 (kg/kWh)",
+        "type": "textbox",
+        "current": { "value": "0.170", "text": "0.170", "selected": false },
+        "query": "0.170",
+        "hide": 2
       }
     ]
   },
   "panels": [
     {
-      "id": 100,
       "type": "row",
-      "title": "Indicadors principals",
-      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 1 },
+      "id": 100,
+      "title": "ECONOMIA",
       "collapsed": false,
-      "panels": []
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 }
     },
     {
       "id": 1,
       "type": "stat",
-      "title": "Potència total planta",
-      "gridPos": { "x": 0, "y": 1, "w": 4, "h": 4 },
+      "title": "Estalvi net avui",
+      "description": "Estalvi per autoconsum = generació autoconsumida × tarifa fixa",
+      "gridPos": { "h": 4, "w": 5, "x": 0, "y": 1 },
       "datasource": { "type": "influxdb", "uid": "influxdb" },
-      "targets": [
-        {
-          "datasource": { "type": "influxdb", "uid": "influxdb" },
-          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r._field == \"ac_power_total\")\n  |> filter(fn: (r) => exists r.inverter)\n  |> last()\n  |> group()\n  |> sum()",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "watt",
-          "color": { "mode": "fixed", "fixedColor": "green" },
-          "thresholds": { "mode": "absolute", "steps": [{ "value": null, "color": "green" }] }
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "textMode": "auto"
-      }
-    },
-    {
-      "id": 2,
-      "type": "stat",
-      "title": "Energia avui",
-      "gridPos": { "x": 4, "y": 1, "w": 3, "h": 4 },
-      "datasource": { "type": "influxdb", "uid": "influxdb" },
-      "targets": [
-        {
-          "datasource": { "type": "influxdb", "uid": "influxdb" },
-          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r._field == \"yield_total\")\n  |> spread()\n  |> group()\n  |> sum()\n  |> map(fn: (r) => ({r with _value: r._value * 1000.0}))",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "watth",
-          "color": { "mode": "fixed", "fixedColor": "blue" },
-          "thresholds": { "mode": "absolute", "steps": [{ "value": null, "color": "blue" }] }
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "textMode": "auto"
-      }
-    },
-    {
-      "id": 3,
-      "type": "stat",
-      "title": "Energia total",
-      "gridPos": { "x": 7, "y": 1, "w": 3, "h": 4 },
-      "datasource": { "type": "influxdb", "uid": "influxdb" },
-      "targets": [
-        {
-          "datasource": { "type": "influxdb", "uid": "influxdb" },
-          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r._field == \"yield_total\")\n  |> filter(fn: (r) => exists r.inverter)\n  |> last()\n  |> group()\n  |> sum()",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "kwatth",
-          "color": { "mode": "fixed", "fixedColor": "blue" },
-          "thresholds": { "mode": "absolute", "steps": [{ "value": null, "color": "blue" }] }
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "textMode": "auto"
-      }
-    },
-    {
-      "id": 4,
-      "type": "stat",
-      "title": "CO₂ estalviat avui",
-      "gridPos": { "x": 10, "y": 1, "w": 3, "h": 4 },
-      "datasource": { "type": "influxdb", "uid": "influxdb" },
-      "targets": [
-        {
-          "datasource": { "type": "influxdb", "uid": "influxdb" },
-          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r._field == \"yield_total\")\n  |> spread()\n  |> group()\n  |> sum()\n  |> map(fn: (r) => ({r with _value: r._value * ${co2_factor}}))",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "masskg",
-          "decimals": 2,
-          "color": { "mode": "fixed", "fixedColor": "light-green" },
-          "thresholds": { "mode": "absolute", "steps": [{ "value": null, "color": "light-green" }] }
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "textMode": "auto"
-      }
-    },
-    {
-      "id": 5,
-      "type": "stat",
-      "title": "CO₂ estalviat total",
-      "gridPos": { "x": 13, "y": 1, "w": 3, "h": 4 },
-      "datasource": { "type": "influxdb", "uid": "influxdb" },
-      "targets": [
-        {
-          "datasource": { "type": "influxdb", "uid": "influxdb" },
-          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r._field == \"yield_total\")\n  |> filter(fn: (r) => exists r.inverter)\n  |> last()\n  |> group()\n  |> sum()\n  |> map(fn: (r) => ({r with _value: r._value * ${co2_factor} / 1000.0}))",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "masst",
-          "decimals": 2,
-          "color": { "mode": "fixed", "fixedColor": "light-green" },
-          "thresholds": { "mode": "absolute", "steps": [{ "value": null, "color": "light-green" }] }
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "textMode": "auto"
-      }
-    },
-    {
-      "id": 6,
-      "type": "stat",
-      "title": "Diners estalviats avui",
-      "gridPos": { "x": 16, "y": 1, "w": 3, "h": 4 },
-      "datasource": { "type": "influxdb", "uid": "influxdb" },
-      "targets": [
-        {
-          "datasource": { "type": "influxdb", "uid": "influxdb" },
-          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r._field == \"yield_total\")\n  |> spread()\n  |> group()\n  |> sum()\n  |> map(fn: (r) => ({r with _value: r._value * ${electricity_cost}}))",
-          "refId": "A"
-        }
-      ],
       "fieldConfig": {
         "defaults": {
           "unit": "currencyEUR",
           "decimals": 2,
-          "color": { "mode": "fixed", "fixedColor": "orange" },
-          "thresholds": { "mode": "absolute", "steps": [{ "value": null, "color": "orange" }] }
+          "color": { "mode": "fixed", "fixedColor": "#002B5B" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "value": null, "color": "#E63946" },
+              { "value": 0, "color": "#002B5B" }
+            ]
+          }
         },
         "overrides": []
       },
       "options": {
         "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "orientation": "auto",
+        "textMode": "value",
         "colorMode": "value",
         "graphMode": "none",
-        "justifyMode": "auto",
-        "textMode": "auto"
-      }
-    },
-    {
-      "id": 50,
-      "type": "stat",
-      "title": "PIKO 15",
-      "description": "Estat i càrrega del PIKO 15",
-      "gridPos": { "x": 19, "y": 1, "w": 3, "h": 4 },
-      "datasource": { "type": "influxdb", "uid": "influxdb" },
+        "justifyMode": "auto"
+      },
       "targets": [
         {
+          "refId": "A",
           "datasource": { "type": "influxdb", "uid": "influxdb" },
-          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r.inverter == \"piko_15\" or not exists r.inverter)\n  |> drop(columns: [\"inverter\"])\n  |> group(columns: [\"_field\"])\n  |> filter(fn: (r) => r._field == \"status\")\n  |> last()",
-          "refId": "A"
-        },
-        {
-          "datasource": { "type": "influxdb", "uid": "influxdb" },
-          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r.inverter == \"piko_15\" or not exists r.inverter)\n  |> drop(columns: [\"inverter\"])\n  |> group(columns: [\"_field\"])\n  |> filter(fn: (r) => r._field == \"ac_power_total\")\n  |> last()\n  |> map(fn: (r) => ({r with _value: r._value / 15000.0 * 100.0}))",
-          "refId": "B",
-          "hide": true
+          "query": "from(bucket: \"solar\")\n  |> range(start: today())\n  |> filter(fn: (r) => r._measurement == \"piko\" and r.inverter == \"piko_15\")\n  |> filter(fn: (r) => r._field == \"self_consumption_daily\")\n  |> last()\n  |> map(fn: (r) => ({r with _value: r._value * ${electricity_cost}}))"
         }
-      ],
+      ]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Ingressos injecció avui",
+      "description": "Energia exportada a xarxa × preu d'injecció",
+      "gridPos": { "h": 4, "w": 5, "x": 5, "y": 1 },
+      "datasource": { "type": "influxdb", "uid": "influxdb" },
       "fieldConfig": {
         "defaults": {
-          "mappings": [
-            {
-              "type": "value",
-              "options": {
-                "0": { "text": "PIKO 15 — Apagat", "color": "dark-red" },
-                "1": { "text": "PIKO 15 — Repòs", "color": "dark-yellow" },
-                "2": { "text": "PIKO 15 — Iniciant", "color": "yellow" },
-                "3": { "text": "PIKO 15 — Injectant", "color": "green" },
-                "4": { "text": "PIKO 15 — Limitat", "color": "orange" },
-                "5": { "text": "PIKO 15 — Injectant", "color": "green" }
-              }
-            }
-          ],
-          "color": { "mode": "thresholds" },
-          "thresholds": { "mode": "absolute", "steps": [{ "value": null, "color": "text" }] }
+          "unit": "currencyEUR",
+          "decimals": 2,
+          "color": { "mode": "fixed", "fixedColor": "#0C4DA2" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "value": null, "color": "#0C4DA2" }
+            ]
+          }
         },
         "overrides": []
       },
       "options": {
         "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "colorMode": "background",
+        "orientation": "auto",
+        "textMode": "value",
+        "colorMode": "value",
         "graphMode": "none",
-        "justifyMode": "center",
-        "textMode": "auto"
-      }
-    },
-    {
-      "id": 51,
-      "type": "stat",
-      "title": "PIKO CI 50",
-      "description": "Estat i càrrega del PIKO CI 50",
-      "gridPos": { "x": 22, "y": 1, "w": 2, "h": 4 },
-      "datasource": { "type": "influxdb", "uid": "influxdb" },
+        "justifyMode": "auto"
+      },
       "targets": [
         {
+          "refId": "A",
           "datasource": { "type": "influxdb", "uid": "influxdb" },
-          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r.inverter == \"piko_ci_50\")\n  |> filter(fn: (r) => r._field == \"status\")\n  |> last()",
-          "refId": "A"
-        },
-        {
-          "datasource": { "type": "influxdb", "uid": "influxdb" },
-          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r.inverter == \"piko_ci_50\")\n  |> filter(fn: (r) => r._field == \"ac_power_total\")\n  |> last()\n  |> map(fn: (r) => ({r with _value: r._value / 50000.0 * 100.0}))",
-          "refId": "B",
-          "hide": true
+          "query": "from(bucket: \"solar\")\n  |> range(start: today())\n  |> filter(fn: (r) => r._measurement == \"ksem\")\n  |> filter(fn: (r) => r._field == \"energy_export_total\")\n  |> spread()\n  |> map(fn: (r) => ({r with _value: r._value * ${injection_price}}))"
         }
-      ],
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Benefici total avui",
+      "description": "Estalvi autoconsum + ingressos injecció",
+      "gridPos": { "h": 4, "w": 5, "x": 10, "y": 1 },
+      "datasource": { "type": "influxdb", "uid": "influxdb" },
       "fieldConfig": {
         "defaults": {
-          "mappings": [
-            {
-              "type": "value",
-              "options": {
-                "0": { "text": "CI 50 — Apagat", "color": "dark-red" },
-                "1": { "text": "CI 50 — Repòs", "color": "dark-yellow" },
-                "2": { "text": "CI 50 — Iniciant", "color": "yellow" },
-                "3": { "text": "CI 50 — Injectant", "color": "green" },
-                "4": { "text": "CI 50 — Limitat", "color": "orange" },
-                "5": { "text": "CI 50 — Injectant", "color": "green" }
-              }
-            }
-          ],
-          "color": { "mode": "thresholds" },
-          "thresholds": { "mode": "absolute", "steps": [{ "value": null, "color": "text" }] }
+          "unit": "currencyEUR",
+          "decimals": 2,
+          "color": { "mode": "fixed", "fixedColor": "#002B5B" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "value": null, "color": "#E63946" },
+              { "value": 0, "color": "#002B5B" }
+            ]
+          }
         },
         "overrides": []
       },
       "options": {
         "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "colorMode": "background",
+        "orientation": "auto",
+        "textMode": "value",
+        "colorMode": "value",
         "graphMode": "none",
-        "justifyMode": "center",
-        "textMode": "auto"
-      }
+        "justifyMode": "auto"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdb", "uid": "influxdb" },
+          "query": "savings = from(bucket: \"solar\")\n  |> range(start: today())\n  |> filter(fn: (r) => r._measurement == \"piko\" and r.inverter == \"piko_15\")\n  |> filter(fn: (r) => r._field == \"self_consumption_daily\")\n  |> last()\n  |> map(fn: (r) => ({r with _value: r._value * ${electricity_cost}}))\n\nexport_income = from(bucket: \"solar\")\n  |> range(start: today())\n  |> filter(fn: (r) => r._measurement == \"ksem\")\n  |> filter(fn: (r) => r._field == \"energy_export_total\")\n  |> spread()\n  |> map(fn: (r) => ({r with _value: r._value * ${injection_price}}))\n\nunion(tables: [savings, export_income])\n  |> group()\n  |> sum()"
+        }
+      ]
     },
-
     {
-      "id": 101,
+      "id": 4,
+      "type": "stat",
+      "title": "Benefici mensual acumulat",
+      "description": "Benefici total del mes en curs",
+      "gridPos": { "h": 4, "w": 5, "x": 15, "y": 1 },
+      "datasource": { "type": "influxdb", "uid": "influxdb" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyEUR",
+          "decimals": 2,
+          "color": { "mode": "fixed", "fixedColor": "#002B5B" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "value": null, "color": "#E63946" },
+              { "value": 0, "color": "#002B5B" }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "orientation": "auto",
+        "textMode": "value",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdb", "uid": "influxdb" },
+          "query": "import \"date\"\n\nstart = date.truncate(t: now(), unit: 1mo)\n\nsavings = from(bucket: \"solar\")\n  |> range(start: start)\n  |> filter(fn: (r) => r._measurement == \"piko\" and r.inverter == \"piko_15\")\n  |> filter(fn: (r) => r._field == \"self_consumption_daily\")\n  |> aggregateWindow(every: 1d, fn: last, createEmpty: false)\n  |> sum()\n  |> map(fn: (r) => ({r with _value: r._value * ${electricity_cost}}))\n\nexport_income = from(bucket: \"solar\")\n  |> range(start: start)\n  |> filter(fn: (r) => r._measurement == \"ksem\")\n  |> filter(fn: (r) => r._field == \"energy_export_total\")\n  |> aggregateWindow(every: 1d, fn: spread, createEmpty: false)\n  |> sum()\n  |> map(fn: (r) => ({r with _value: r._value * ${injection_price}}))\n\nunion(tables: [savings, export_income])\n  |> group()\n  |> sum()"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Cost efectiu €/kWh",
+      "description": "Cost net per kWh consumit (importació × tarifa / consum total)",
+      "gridPos": { "h": 4, "w": 4, "x": 20, "y": 1 },
+      "datasource": { "type": "influxdb", "uid": "influxdb" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyEUR",
+          "decimals": 4,
+          "color": { "mode": "fixed", "fixedColor": "#D4D4D4" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "value": null, "color": "#2ecc71" },
+              { "value": 0.10, "color": "#D4D4D4" },
+              { "value": 0.15, "color": "#E63946" }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "orientation": "auto",
+        "textMode": "value",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdb", "uid": "influxdb" },
+          "query": "import \"array\"\n\nimported = from(bucket: \"solar\")\n  |> range(start: today())\n  |> filter(fn: (r) => r._measurement == \"ksem\")\n  |> filter(fn: (r) => r._field == \"energy_import_total\")\n  |> spread()\n  |> findRecord(fn: (key) => true, idx: 0)\n\nconsumed = from(bucket: \"solar\")\n  |> range(start: today())\n  |> filter(fn: (r) => r._measurement == \"piko\" and r.inverter == \"piko_15\")\n  |> filter(fn: (r) => r._field == \"home_consumption_daily\")\n  |> last()\n  |> findRecord(fn: (key) => true, idx: 0)\n\narray.from(rows: [{\n  _time: now(),\n  _value: if consumed._value > 0.0 then (imported._value * ${electricity_cost}) / consumed._value else 0.0\n}])"
+        }
+      ]
+    },
+    {
       "type": "row",
-      "title": "Corba de potència",
-      "gridPos": { "x": 0, "y": 5, "w": 24, "h": 1 },
+      "id": 200,
+      "title": "ENERGIA",
       "collapsed": false,
-      "panels": []
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 5 }
     },
     {
-      "id": 8,
-      "type": "timeseries",
-      "title": "Potència AC planta",
-      "gridPos": { "x": 0, "y": 6, "w": 24, "h": 8 },
+      "id": 10,
+      "type": "stat",
+      "title": "Generació planta ara",
+      "description": "Potència AC total de tots els inversors",
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 6 },
       "datasource": { "type": "influxdb", "uid": "influxdb" },
-      "targets": [
-        {
-          "datasource": { "type": "influxdb", "uid": "influxdb" },
-          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r.inverter == \"piko_15\" or not exists r.inverter)\n  |> drop(columns: [\"inverter\"])\n  |> group(columns: [\"_field\"])\n  |> filter(fn: (r) => r._field == \"ac_power_total\")",
-          "refId": "A"
-        },
-        {
-          "datasource": { "type": "influxdb", "uid": "influxdb" },
-          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r.inverter == \"piko_ci_50\")\n  |> filter(fn: (r) => r._field == \"ac_power_total\")",
-          "refId": "B"
-        }
-      ],
       "fieldConfig": {
         "defaults": {
           "unit": "watt",
-          "color": { "mode": "palette-classic" },
+          "decimals": 0,
+          "color": { "mode": "fixed", "fixedColor": "#0C4DA2" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "value": null, "color": "#D4D4D4" },
+              { "value": 100, "color": "#0C4DA2" }
+            ]
+          },
+          "max": 65000
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "orientation": "auto",
+        "textMode": "value",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdb", "uid": "influxdb" },
+          "query": "from(bucket: \"solar\")\n  |> range(start: -5m)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => exists r.inverter)\n  |> filter(fn: (r) => r._field == \"ac_power_total\")\n  |> last()\n  |> group()\n  |> sum()"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "type": "stat",
+      "title": "Consum negoci ara",
+      "description": "Consum instantani total (via PIKO 15 KSEM integration)",
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 6 },
+      "datasource": { "type": "influxdb", "uid": "influxdb" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "watt",
+          "decimals": 0,
+          "color": { "mode": "fixed", "fixedColor": "#D4D4D4" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "value": null, "color": "#D4D4D4" }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "orientation": "auto",
+        "textMode": "value",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdb", "uid": "influxdb" },
+          "query": "from(bucket: \"solar\")\n  |> range(start: -5m)\n  |> filter(fn: (r) => r._measurement == \"piko\" and r.inverter == \"piko_15\")\n  |> filter(fn: (r) => r._field == \"self_consumption_power\")\n  |> last()"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "type": "stat",
+      "title": "Flux xarxa ara",
+      "description": "KSEM potència activa total — positiu = exportació (verd), negatiu = importació (vermell)",
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 6 },
+      "datasource": { "type": "influxdb", "uid": "influxdb" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "watt",
+          "decimals": 0,
+          "color": { "mode": "fixed", "fixedColor": "#D4D4D4" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "value": null, "color": "#E63946" },
+              { "value": 0, "color": "#2ecc71" }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "orientation": "auto",
+        "textMode": "value",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdb", "uid": "influxdb" },
+          "query": "from(bucket: \"solar\")\n  |> range(start: -5m)\n  |> filter(fn: (r) => r._measurement == \"ksem\")\n  |> filter(fn: (r) => r._field == \"active_power_total\")\n  |> last()"
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "type": "gauge",
+      "title": "Taxa autoconsum",
+      "description": "Percentatge d'autoconsum diari",
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 6 },
+      "datasource": { "type": "influxdb", "uid": "influxdb" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 1,
+          "min": 0,
+          "max": 100,
+          "color": { "mode": "continuous-BlYlRd" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "value": null, "color": "#E63946" },
+              { "value": 50, "color": "#f1c40f" },
+              { "value": 80, "color": "#2ecc71" }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true,
+        "orientation": "auto"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdb", "uid": "influxdb" },
+          "query": "from(bucket: \"solar\")\n  |> range(start: -5m)\n  |> filter(fn: (r) => r._measurement == \"piko\" and r.inverter == \"piko_15\")\n  |> filter(fn: (r) => r._field == \"self_consumption_rate_daily\")\n  |> last()"
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "type": "timeseries",
+      "title": "Corba de potència",
+      "description": "Generació solar vs consum vs flux de xarxa",
+      "gridPos": { "h": 8, "w": 16, "x": 0, "y": 10 },
+      "datasource": { "type": "influxdb", "uid": "influxdb" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "watt",
           "custom": {
             "drawStyle": "line",
             "lineInterpolation": "smooth",
+            "fillOpacity": 15,
             "lineWidth": 2,
-            "fillOpacity": 30,
-            "gradientMode": "scheme",
-            "spanNulls": false,
+            "pointSize": 3,
             "showPoints": "never",
-            "stacking": { "mode": "normal", "group": "A" },
-            "axisBorderShow": false,
-            "axisLabel": "",
-            "scaleDistribution": { "type": "linear" }
+            "spanNulls": true,
+            "stacking": { "mode": "none" },
+            "axisPlacement": "auto"
           }
         },
         "overrides": [
           {
-            "matcher": { "id": "byFrameRefID", "options": "A" },
+            "matcher": { "id": "byName", "options": "Generació" },
             "properties": [
-              { "id": "displayName", "value": "PIKO 15" },
-              { "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "#0C4DA2" } }
             ]
           },
           {
-            "matcher": { "id": "byFrameRefID", "options": "B" },
+            "matcher": { "id": "byName", "options": "Consum" },
             "properties": [
-              { "id": "displayName", "value": "PIKO CI 50" },
-              { "id": "color", "value": { "mode": "fixed", "fixedColor": "semi-dark-blue" } }
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "#D4D4D4" } }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Xarxa" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "#E63946" } }
             ]
           }
         ]
       },
       "options": {
         "tooltip": { "mode": "multi", "sort": "desc" },
-        "legend": { "displayMode": "list", "placement": "bottom", "calcs": ["max", "mean"] }
-      }
-    },
-
-    {
-      "id": 102,
-      "type": "row",
-      "title": "PIKO 15: Strings DC",
-      "gridPos": { "x": 0, "y": 14, "w": 24, "h": 1 },
-      "collapsed": false,
-      "panels": []
-    },
-    {
-      "id": 9,
-      "type": "gauge",
-      "title": "Potència String 1",
-      "gridPos": { "x": 0, "y": 15, "w": 8, "h": 5 },
-      "datasource": { "type": "influxdb", "uid": "influxdb" },
-      "targets": [
-        {
-          "datasource": { "type": "influxdb", "uid": "influxdb" },
-          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r.inverter == \"piko_15\" or not exists r.inverter)\n  |> drop(columns: [\"inverter\"])\n  |> group(columns: [\"_field\"])\n  |> filter(fn: (r) => r._field == \"dc_power_string1\")\n  |> last()",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "watt",
-          "min": 0,
-          "max": 6000,
-          "color": { "mode": "thresholds" },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "value": null, "color": "green" },
-              { "value": 4000, "color": "yellow" },
-              { "value": 5000, "color": "orange" }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "showThresholdLabels": false,
-        "showThresholdMarkers": true
-      }
-    },
-    {
-      "id": 10,
-      "type": "gauge",
-      "title": "Potència String 2",
-      "gridPos": { "x": 8, "y": 15, "w": 8, "h": 5 },
-      "datasource": { "type": "influxdb", "uid": "influxdb" },
-      "targets": [
-        {
-          "datasource": { "type": "influxdb", "uid": "influxdb" },
-          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r.inverter == \"piko_15\" or not exists r.inverter)\n  |> drop(columns: [\"inverter\"])\n  |> group(columns: [\"_field\"])\n  |> filter(fn: (r) => r._field == \"dc_power_string2\")\n  |> last()",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "watt",
-          "min": 0,
-          "max": 6000,
-          "color": { "mode": "thresholds" },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "value": null, "color": "green" },
-              { "value": 4000, "color": "yellow" },
-              { "value": 5000, "color": "orange" }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "showThresholdLabels": false,
-        "showThresholdMarkers": true
-      }
-    },
-    {
-      "id": 11,
-      "type": "gauge",
-      "title": "Potència String 3",
-      "gridPos": { "x": 16, "y": 15, "w": 8, "h": 5 },
-      "datasource": { "type": "influxdb", "uid": "influxdb" },
-      "targets": [
-        {
-          "datasource": { "type": "influxdb", "uid": "influxdb" },
-          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r.inverter == \"piko_15\" or not exists r.inverter)\n  |> drop(columns: [\"inverter\"])\n  |> group(columns: [\"_field\"])\n  |> filter(fn: (r) => r._field == \"dc_power_string3\")\n  |> last()",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "watt",
-          "min": 0,
-          "max": 6000,
-          "color": { "mode": "thresholds" },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "value": null, "color": "green" },
-              { "value": 4000, "color": "yellow" },
-              { "value": 5000, "color": "orange" }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "showThresholdLabels": false,
-        "showThresholdMarkers": true
-      }
-    },
-    {
-      "id": 12,
-      "type": "timeseries",
-      "title": "Voltatge DC per string",
-      "gridPos": { "x": 0, "y": 20, "w": 12, "h": 8 },
-      "datasource": { "type": "influxdb", "uid": "influxdb" },
-      "targets": [
-        {
-          "datasource": { "type": "influxdb", "uid": "influxdb" },
-          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r.inverter == \"piko_15\" or not exists r.inverter)\n  |> drop(columns: [\"inverter\"])\n  |> group(columns: [\"_field\"])\n  |> filter(fn: (r) => r._field == \"dc_voltage_string1\" or r._field == \"dc_voltage_string2\" or r._field == \"dc_voltage_string3\")",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "volt",
-          "color": { "mode": "palette-classic" },
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "smooth",
-            "lineWidth": 2,
-            "fillOpacity": 0,
-            "showPoints": "never"
-          }
-        },
-        "overrides": [
-          {
-            "matcher": { "id": "byName", "options": "dc_voltage_string1" },
-            "properties": [{ "id": "displayName", "value": "String 1" }]
-          },
-          {
-            "matcher": { "id": "byName", "options": "dc_voltage_string2" },
-            "properties": [{ "id": "displayName", "value": "String 2" }]
-          },
-          {
-            "matcher": { "id": "byName", "options": "dc_voltage_string3" },
-            "properties": [{ "id": "displayName", "value": "String 3" }]
-          }
-        ]
-      },
-      "options": {
-        "tooltip": { "mode": "multi", "sort": "none" },
         "legend": { "displayMode": "list", "placement": "bottom" }
-      }
-    },
-    {
-      "id": 13,
-      "type": "timeseries",
-      "title": "Corrent DC per string",
-      "gridPos": { "x": 12, "y": 20, "w": 12, "h": 8 },
-      "datasource": { "type": "influxdb", "uid": "influxdb" },
+      },
       "targets": [
         {
+          "refId": "A",
           "datasource": { "type": "influxdb", "uid": "influxdb" },
-          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r.inverter == \"piko_15\" or not exists r.inverter)\n  |> drop(columns: [\"inverter\"])\n  |> group(columns: [\"_field\"])\n  |> filter(fn: (r) => r._field == \"dc_current_string1\" or r._field == \"dc_current_string2\" or r._field == \"dc_current_string3\")",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "amp",
-          "color": { "mode": "palette-classic" },
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "smooth",
-            "lineWidth": 2,
-            "fillOpacity": 0,
-            "showPoints": "never"
-          }
+          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => exists r.inverter)\n  |> filter(fn: (r) => r._field == \"ac_power_total\")\n  |> aggregateWindow(every: 1m, fn: mean, createEmpty: false)\n  |> group(columns: [\"_time\"])\n  |> sum()\n  |> group()\n  |> set(key: \"_field\", value: \"Generació\")"
         },
-        "overrides": [
-          {
-            "matcher": { "id": "byName", "options": "dc_current_string1" },
-            "properties": [{ "id": "displayName", "value": "String 1" }]
-          },
-          {
-            "matcher": { "id": "byName", "options": "dc_current_string2" },
-            "properties": [{ "id": "displayName", "value": "String 2" }]
-          },
-          {
-            "matcher": { "id": "byName", "options": "dc_current_string3" },
-            "properties": [{ "id": "displayName", "value": "String 3" }]
-          }
-        ]
-      },
-      "options": {
-        "tooltip": { "mode": "multi", "sort": "none" },
-        "legend": { "displayMode": "list", "placement": "bottom" }
-      }
-    },
-
-    {
-      "id": 103,
-      "type": "row",
-      "title": "PIKO 15: Fases AC",
-      "gridPos": { "x": 0, "y": 28, "w": 24, "h": 1 },
-      "collapsed": false,
-      "panels": []
-    },
-    {
-      "id": 14,
-      "type": "stat",
-      "title": "Potència L1",
-      "gridPos": { "x": 0, "y": 29, "w": 6, "h": 4 },
-      "datasource": { "type": "influxdb", "uid": "influxdb" },
-      "targets": [
         {
+          "refId": "B",
           "datasource": { "type": "influxdb", "uid": "influxdb" },
-          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r.inverter == \"piko_15\" or not exists r.inverter)\n  |> drop(columns: [\"inverter\"])\n  |> group(columns: [\"_field\"])\n  |> filter(fn: (r) => r._field == \"ac_power_l1\")\n  |> last()",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "watt",
-          "color": { "mode": "fixed", "fixedColor": "super-light-blue" },
-          "thresholds": { "mode": "absolute", "steps": [{ "value": null, "color": "super-light-blue" }] }
+          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\" and r.inverter == \"piko_15\")\n  |> filter(fn: (r) => r._field == \"self_consumption_power\")\n  |> aggregateWindow(every: 1m, fn: mean, createEmpty: false)\n  |> set(key: \"_field\", value: \"Consum\")"
         },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "textMode": "auto"
-      }
+        {
+          "refId": "C",
+          "datasource": { "type": "influxdb", "uid": "influxdb" },
+          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"ksem\")\n  |> filter(fn: (r) => r._field == \"active_power_total\")\n  |> aggregateWindow(every: 1m, fn: mean, createEmpty: false)\n  |> set(key: \"_field\", value: \"Xarxa\")"
+        }
+      ]
     },
     {
       "id": 15,
-      "type": "stat",
-      "title": "Potència L2",
-      "gridPos": { "x": 6, "y": 29, "w": 6, "h": 4 },
+      "type": "barchart",
+      "title": "Energia diària 30d",
+      "description": "Producció diària (kWh) últims 30 dies",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 10 },
       "datasource": { "type": "influxdb", "uid": "influxdb" },
-      "targets": [
-        {
-          "datasource": { "type": "influxdb", "uid": "influxdb" },
-          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r.inverter == \"piko_15\" or not exists r.inverter)\n  |> drop(columns: [\"inverter\"])\n  |> group(columns: [\"_field\"])\n  |> filter(fn: (r) => r._field == \"ac_power_l2\")\n  |> last()",
-          "refId": "A"
-        }
-      ],
       "fieldConfig": {
         "defaults": {
-          "unit": "watt",
-          "color": { "mode": "fixed", "fixedColor": "light-blue" },
-          "thresholds": { "mode": "absolute", "steps": [{ "value": null, "color": "light-blue" }] }
+          "unit": "kwatth",
+          "decimals": 1,
+          "color": { "mode": "fixed", "fixedColor": "#0C4DA2" },
+          "custom": {
+            "fillOpacity": 80,
+            "lineWidth": 0,
+            "gradientMode": "scheme"
+          }
         },
         "overrides": []
       },
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "textMode": "auto"
-      }
-    },
-    {
-      "id": 16,
-      "type": "stat",
-      "title": "Potència L3",
-      "gridPos": { "x": 12, "y": 29, "w": 6, "h": 4 },
-      "datasource": { "type": "influxdb", "uid": "influxdb" },
-      "targets": [
-        {
-          "datasource": { "type": "influxdb", "uid": "influxdb" },
-          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r.inverter == \"piko_15\" or not exists r.inverter)\n  |> drop(columns: [\"inverter\"])\n  |> group(columns: [\"_field\"])\n  |> filter(fn: (r) => r._field == \"ac_power_l3\")\n  |> last()",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "watt",
-          "color": { "mode": "fixed", "fixedColor": "blue" },
-          "thresholds": { "mode": "absolute", "steps": [{ "value": null, "color": "blue" }] }
-        },
-        "overrides": []
+        "orientation": "vertical",
+        "showValue": "never",
+        "barWidth": 0.8,
+        "groupWidth": 0.7,
+        "stacking": "normal",
+        "legend": { "displayMode": "hidden" },
+        "tooltip": { "mode": "single" },
+        "xTickLabelRotation": -45
       },
-      "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "textMode": "auto"
-      }
-    },
-    {
-      "id": 17,
-      "type": "stat",
-      "title": "Freqüència de xarxa",
-      "gridPos": { "x": 18, "y": 29, "w": 6, "h": 4 },
-      "datasource": { "type": "influxdb", "uid": "influxdb" },
       "targets": [
         {
+          "refId": "A",
           "datasource": { "type": "influxdb", "uid": "influxdb" },
-          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r.inverter == \"piko_15\" or not exists r.inverter)\n  |> drop(columns: [\"inverter\"])\n  |> group(columns: [\"_field\"])\n  |> filter(fn: (r) => r._field == \"grid_frequency\")\n  |> last()",
-          "refId": "A"
+          "query": "from(bucket: \"solar\")\n  |> range(start: -30d)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => exists r.inverter)\n  |> filter(fn: (r) => r._field == \"yield_total\")\n  |> aggregateWindow(every: 1d, fn: spread, createEmpty: false)\n  |> group(columns: [\"_time\"])\n  |> sum()\n  |> group()"
         }
-      ],
+      ]
+    },
+    {
+      "type": "row",
+      "id": 300,
+      "title": "MERCAT ELÈCTRIC OMIE",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 18 }
+    },
+    {
+      "id": 30,
+      "type": "stat",
+      "title": "Preu OMIE actual",
+      "description": "Últim preu marginal del mercat diari OMIE (EUR/MWh)",
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 19 },
+      "datasource": { "type": "influxdb", "uid": "influxdb" },
       "fieldConfig": {
         "defaults": {
-          "unit": "hertz",
+          "unit": "string",
           "decimals": 2,
-          "color": { "mode": "fixed", "fixedColor": "purple" },
-          "thresholds": { "mode": "absolute", "steps": [{ "value": null, "color": "purple" }] }
+          "color": { "mode": "fixed", "fixedColor": "#D4D4D4" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "value": null, "color": "#2ecc71" },
+              { "value": 50, "color": "#D4D4D4" },
+              { "value": 100, "color": "#f1c40f" },
+              { "value": 150, "color": "#E63946" }
+            ]
+          }
         },
         "overrides": []
       },
       "options": {
         "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "orientation": "auto",
+        "textMode": "value_and_name",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdb", "uid": "influxdb" },
+          "query": "from(bucket: \"solar\")\n  |> range(start: -2h)\n  |> filter(fn: (r) => r._measurement == \"omie_prices\")\n  |> filter(fn: (r) => r._field == \"price_eur_mwh\")\n  |> last()\n  |> map(fn: (r) => ({r with _field: \"EUR/MWh\"}))"
+        }
+      ]
+    },
+    {
+      "id": 31,
+      "type": "stat",
+      "title": "Preu OMIE €/kWh",
+      "description": "Últim preu OMIE en EUR/kWh",
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 19 },
+      "datasource": { "type": "influxdb", "uid": "influxdb" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyEUR",
+          "decimals": 5,
+          "color": { "mode": "fixed", "fixedColor": "#D4D4D4" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "value": null, "color": "#2ecc71" },
+              { "value": 0.10, "color": "#D4D4D4" },
+              { "value": 0.15, "color": "#E63946" }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "orientation": "auto",
+        "textMode": "value",
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdb", "uid": "influxdb" },
+          "query": "from(bucket: \"solar\")\n  |> range(start: -2h)\n  |> filter(fn: (r) => r._measurement == \"omie_prices\")\n  |> filter(fn: (r) => r._field == \"price_eur_kwh\")\n  |> last()"
+        }
+      ]
+    },
+    {
+      "id": 32,
+      "type": "stat",
+      "title": "La teva tarifa fixa",
+      "description": "Tarifa fixa contractada amb descompte del 20%",
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 19 },
+      "datasource": { "type": "influxdb", "uid": "influxdb" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyEUR",
+          "decimals": 4,
+          "color": { "mode": "fixed", "fixedColor": "#002B5B" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "orientation": "auto",
+        "textMode": "value",
         "colorMode": "value",
         "graphMode": "none",
-        "justifyMode": "auto",
-        "textMode": "auto"
-      }
-    },
-    {
-      "id": 18,
-      "type": "timeseries",
-      "title": "Voltatge AC per fase",
-      "gridPos": { "x": 0, "y": 33, "w": 24, "h": 8 },
-      "datasource": { "type": "influxdb", "uid": "influxdb" },
+        "justifyMode": "auto"
+      },
       "targets": [
         {
+          "refId": "A",
           "datasource": { "type": "influxdb", "uid": "influxdb" },
-          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r.inverter == \"piko_15\" or not exists r.inverter)\n  |> drop(columns: [\"inverter\"])\n  |> group(columns: [\"_field\"])\n  |> filter(fn: (r) => r._field == \"ac_voltage_l1\" or r._field == \"ac_voltage_l2\" or r._field == \"ac_voltage_l3\")",
-          "refId": "A"
+          "query": "import \"array\"\n\narray.from(rows: [{_time: now(), _value: ${electricity_cost}}])"
         }
-      ],
+      ]
+    },
+    {
+      "id": 33,
+      "type": "stat",
+      "title": "Cost avui: indexat vs fix",
+      "description": "Cost de la importació avui amb tarifa OMIE vs tarifa fixa",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 19 },
+      "datasource": { "type": "influxdb", "uid": "influxdb" },
       "fieldConfig": {
         "defaults": {
-          "unit": "volt",
-          "color": { "mode": "palette-classic" },
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "smooth",
-            "lineWidth": 2,
-            "fillOpacity": 0,
-            "showPoints": "never"
-          }
+          "unit": "currencyEUR",
+          "decimals": 2,
+          "color": { "mode": "fixed", "fixedColor": "#D4D4D4" }
         },
         "overrides": [
           {
-            "matcher": { "id": "byName", "options": "ac_voltage_l1" },
-            "properties": [{ "id": "displayName", "value": "L1" }]
+            "matcher": { "id": "byName", "options": "Fix" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "#002B5B" } }
+            ]
           },
           {
-            "matcher": { "id": "byName", "options": "ac_voltage_l2" },
-            "properties": [{ "id": "displayName", "value": "L2" }]
-          },
-          {
-            "matcher": { "id": "byName", "options": "ac_voltage_l3" },
-            "properties": [{ "id": "displayName", "value": "L3" }]
+            "matcher": { "id": "byName", "options": "Indexat OMIE" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "#E63946" } }
+            ]
           }
         ]
       },
       "options": {
-        "tooltip": { "mode": "multi", "sort": "none" },
-        "legend": { "displayMode": "list", "placement": "bottom" }
-      }
-    },
-
-    {
-      "id": 105,
-      "type": "row",
-      "title": "PIKO CI 50: Strings DC",
-      "gridPos": { "x": 0, "y": 41, "w": 24, "h": 1 },
-      "collapsed": false,
-      "panels": []
-    },
-    {
-      "id": 30,
-      "type": "gauge",
-      "title": "Potència String 1",
-      "gridPos": { "x": 0, "y": 42, "w": 6, "h": 5 },
-      "datasource": { "type": "influxdb", "uid": "influxdb" },
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "orientation": "horizontal",
+        "textMode": "value_and_name",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      },
       "targets": [
         {
+          "refId": "A",
           "datasource": { "type": "influxdb", "uid": "influxdb" },
-          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r.inverter == \"piko_ci_50\")\n  |> filter(fn: (r) => r._field == \"dc_power_string1\")\n  |> last()",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "watt",
-          "min": 0,
-          "max": 15000,
-          "color": { "mode": "thresholds" },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "value": null, "color": "green" },
-              { "value": 10000, "color": "yellow" },
-              { "value": 13000, "color": "orange" }
-            ]
-          }
+          "query": "import \"array\"\n\nimported = from(bucket: \"solar\")\n  |> range(start: today())\n  |> filter(fn: (r) => r._measurement == \"ksem\")\n  |> filter(fn: (r) => r._field == \"energy_import_total\")\n  |> spread()\n  |> findRecord(fn: (key) => true, idx: 0)\n\narray.from(rows: [\n  {_time: now(), _field: \"Fix\", _value: imported._value * ${electricity_cost}}\n])"
         },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "showThresholdLabels": false,
-        "showThresholdMarkers": true
-      }
-    },
-    {
-      "id": 31,
-      "type": "gauge",
-      "title": "Potència String 2",
-      "gridPos": { "x": 6, "y": 42, "w": 6, "h": 5 },
-      "datasource": { "type": "influxdb", "uid": "influxdb" },
-      "targets": [
         {
+          "refId": "B",
           "datasource": { "type": "influxdb", "uid": "influxdb" },
-          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r.inverter == \"piko_ci_50\")\n  |> filter(fn: (r) => r._field == \"dc_power_string2\")\n  |> last()",
-          "refId": "A"
+          "query": "import \"array\"\n\nimported = from(bucket: \"solar\")\n  |> range(start: today())\n  |> filter(fn: (r) => r._measurement == \"ksem\")\n  |> filter(fn: (r) => r._field == \"energy_import_total\")\n  |> spread()\n  |> findRecord(fn: (key) => true, idx: 0)\n\nomie_avg = from(bucket: \"solar\")\n  |> range(start: today())\n  |> filter(fn: (r) => r._measurement == \"omie_prices\")\n  |> filter(fn: (r) => r._field == \"price_eur_kwh\")\n  |> mean()\n  |> findRecord(fn: (key) => true, idx: 0)\n\narray.from(rows: [\n  {_time: now(), _field: \"Indexat OMIE\", _value: imported._value * omie_avg._value}\n])"
         }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "watt",
-          "min": 0,
-          "max": 15000,
-          "color": { "mode": "thresholds" },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "value": null, "color": "green" },
-              { "value": 10000, "color": "yellow" },
-              { "value": 13000, "color": "orange" }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "showThresholdLabels": false,
-        "showThresholdMarkers": true
-      }
-    },
-    {
-      "id": 32,
-      "type": "gauge",
-      "title": "Potència String 3",
-      "gridPos": { "x": 12, "y": 42, "w": 6, "h": 5 },
-      "datasource": { "type": "influxdb", "uid": "influxdb" },
-      "targets": [
-        {
-          "datasource": { "type": "influxdb", "uid": "influxdb" },
-          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r.inverter == \"piko_ci_50\")\n  |> filter(fn: (r) => r._field == \"dc_power_string3\")\n  |> last()",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "watt",
-          "min": 0,
-          "max": 15000,
-          "color": { "mode": "thresholds" },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "value": null, "color": "green" },
-              { "value": 10000, "color": "yellow" },
-              { "value": 13000, "color": "orange" }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "showThresholdLabels": false,
-        "showThresholdMarkers": true
-      }
-    },
-    {
-      "id": 33,
-      "type": "gauge",
-      "title": "Potència String 4",
-      "gridPos": { "x": 18, "y": 42, "w": 6, "h": 5 },
-      "datasource": { "type": "influxdb", "uid": "influxdb" },
-      "targets": [
-        {
-          "datasource": { "type": "influxdb", "uid": "influxdb" },
-          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r.inverter == \"piko_ci_50\")\n  |> filter(fn: (r) => r._field == \"dc_power_string4\")\n  |> last()",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "watt",
-          "min": 0,
-          "max": 15000,
-          "color": { "mode": "thresholds" },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "value": null, "color": "green" },
-              { "value": 10000, "color": "yellow" },
-              { "value": 13000, "color": "orange" }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "showThresholdLabels": false,
-        "showThresholdMarkers": true
-      }
+      ]
     },
     {
       "id": 34,
       "type": "timeseries",
-      "title": "Voltatge DC per string",
-      "gridPos": { "x": 0, "y": 47, "w": 12, "h": 8 },
+      "title": "Preu OMIE horari",
+      "description": "Preu marginal OMIE quart-horari amb línia de tarifa fixa de referència",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 23 },
       "datasource": { "type": "influxdb", "uid": "influxdb" },
-      "targets": [
-        {
-          "datasource": { "type": "influxdb", "uid": "influxdb" },
-          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r.inverter == \"piko_ci_50\")\n  |> filter(fn: (r) => r._field == \"dc_voltage_string1\" or r._field == \"dc_voltage_string2\" or r._field == \"dc_voltage_string3\" or r._field == \"dc_voltage_string4\")",
-          "refId": "A"
-        }
-      ],
       "fieldConfig": {
         "defaults": {
-          "unit": "volt",
-          "color": { "mode": "palette-classic" },
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "smooth",
-            "lineWidth": 2,
-            "fillOpacity": 0,
-            "showPoints": "never"
-          }
-        },
-        "overrides": [
-          {
-            "matcher": { "id": "byName", "options": "dc_voltage_string1" },
-            "properties": [{ "id": "displayName", "value": "String 1" }]
-          },
-          {
-            "matcher": { "id": "byName", "options": "dc_voltage_string2" },
-            "properties": [{ "id": "displayName", "value": "String 2" }]
-          },
-          {
-            "matcher": { "id": "byName", "options": "dc_voltage_string3" },
-            "properties": [{ "id": "displayName", "value": "String 3" }]
-          },
-          {
-            "matcher": { "id": "byName", "options": "dc_voltage_string4" },
-            "properties": [{ "id": "displayName", "value": "String 4" }]
-          }
-        ]
-      },
-      "options": {
-        "tooltip": { "mode": "multi", "sort": "none" },
-        "legend": { "displayMode": "list", "placement": "bottom" }
-      }
-    },
-    {
-      "id": 35,
-      "type": "timeseries",
-      "title": "Corrent DC per string",
-      "gridPos": { "x": 12, "y": 47, "w": 12, "h": 8 },
-      "datasource": { "type": "influxdb", "uid": "influxdb" },
-      "targets": [
-        {
-          "datasource": { "type": "influxdb", "uid": "influxdb" },
-          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r.inverter == \"piko_ci_50\")\n  |> filter(fn: (r) => r._field == \"dc_current_string1\" or r._field == \"dc_current_string2\" or r._field == \"dc_current_string3\" or r._field == \"dc_current_string4\")",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "amp",
-          "color": { "mode": "palette-classic" },
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "smooth",
-            "lineWidth": 2,
-            "fillOpacity": 0,
-            "showPoints": "never"
-          }
-        },
-        "overrides": [
-          {
-            "matcher": { "id": "byName", "options": "dc_current_string1" },
-            "properties": [{ "id": "displayName", "value": "String 1" }]
-          },
-          {
-            "matcher": { "id": "byName", "options": "dc_current_string2" },
-            "properties": [{ "id": "displayName", "value": "String 2" }]
-          },
-          {
-            "matcher": { "id": "byName", "options": "dc_current_string3" },
-            "properties": [{ "id": "displayName", "value": "String 3" }]
-          },
-          {
-            "matcher": { "id": "byName", "options": "dc_current_string4" },
-            "properties": [{ "id": "displayName", "value": "String 4" }]
-          }
-        ]
-      },
-      "options": {
-        "tooltip": { "mode": "multi", "sort": "none" },
-        "legend": { "displayMode": "list", "placement": "bottom" }
-      }
-    },
-
-    {
-      "id": 106,
-      "type": "row",
-      "title": "PIKO CI 50: Fases AC",
-      "gridPos": { "x": 0, "y": 55, "w": 24, "h": 1 },
-      "collapsed": false,
-      "panels": []
-    },
-    {
-      "id": 36,
-      "type": "stat",
-      "title": "Potència L1",
-      "gridPos": { "x": 0, "y": 56, "w": 6, "h": 4 },
-      "datasource": { "type": "influxdb", "uid": "influxdb" },
-      "targets": [
-        {
-          "datasource": { "type": "influxdb", "uid": "influxdb" },
-          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r.inverter == \"piko_ci_50\")\n  |> filter(fn: (r) => r._field == \"ac_power_l1\")\n  |> last()",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "watt",
-          "color": { "mode": "fixed", "fixedColor": "super-light-blue" },
-          "thresholds": { "mode": "absolute", "steps": [{ "value": null, "color": "super-light-blue" }] }
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "textMode": "auto"
-      }
-    },
-    {
-      "id": 37,
-      "type": "stat",
-      "title": "Potència L2",
-      "gridPos": { "x": 6, "y": 56, "w": 6, "h": 4 },
-      "datasource": { "type": "influxdb", "uid": "influxdb" },
-      "targets": [
-        {
-          "datasource": { "type": "influxdb", "uid": "influxdb" },
-          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r.inverter == \"piko_ci_50\")\n  |> filter(fn: (r) => r._field == \"ac_power_l2\")\n  |> last()",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "watt",
-          "color": { "mode": "fixed", "fixedColor": "light-blue" },
-          "thresholds": { "mode": "absolute", "steps": [{ "value": null, "color": "light-blue" }] }
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "textMode": "auto"
-      }
-    },
-    {
-      "id": 38,
-      "type": "stat",
-      "title": "Potència L3",
-      "gridPos": { "x": 12, "y": 56, "w": 6, "h": 4 },
-      "datasource": { "type": "influxdb", "uid": "influxdb" },
-      "targets": [
-        {
-          "datasource": { "type": "influxdb", "uid": "influxdb" },
-          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r.inverter == \"piko_ci_50\")\n  |> filter(fn: (r) => r._field == \"ac_power_l3\")\n  |> last()",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "watt",
-          "color": { "mode": "fixed", "fixedColor": "blue" },
-          "thresholds": { "mode": "absolute", "steps": [{ "value": null, "color": "blue" }] }
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "textMode": "auto"
-      }
-    },
-    {
-      "id": 39,
-      "type": "stat",
-      "title": "Freqüència de xarxa",
-      "gridPos": { "x": 18, "y": 56, "w": 6, "h": 4 },
-      "datasource": { "type": "influxdb", "uid": "influxdb" },
-      "targets": [
-        {
-          "datasource": { "type": "influxdb", "uid": "influxdb" },
-          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r.inverter == \"piko_ci_50\")\n  |> filter(fn: (r) => r._field == \"grid_frequency\")\n  |> last()",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "hertz",
-          "decimals": 2,
-          "color": { "mode": "fixed", "fixedColor": "purple" },
-          "thresholds": { "mode": "absolute", "steps": [{ "value": null, "color": "purple" }] }
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "textMode": "auto"
-      }
-    },
-    {
-      "id": 40,
-      "type": "timeseries",
-      "title": "Voltatge AC per fase",
-      "gridPos": { "x": 0, "y": 60, "w": 24, "h": 8 },
-      "datasource": { "type": "influxdb", "uid": "influxdb" },
-      "targets": [
-        {
-          "datasource": { "type": "influxdb", "uid": "influxdb" },
-          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r.inverter == \"piko_ci_50\")\n  |> filter(fn: (r) => r._field == \"ac_voltage_l1\" or r._field == \"ac_voltage_l2\" or r._field == \"ac_voltage_l3\")",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "volt",
-          "color": { "mode": "palette-classic" },
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "smooth",
-            "lineWidth": 2,
-            "fillOpacity": 0,
-            "showPoints": "never"
-          }
-        },
-        "overrides": [
-          {
-            "matcher": { "id": "byName", "options": "ac_voltage_l1" },
-            "properties": [{ "id": "displayName", "value": "L1" }]
-          },
-          {
-            "matcher": { "id": "byName", "options": "ac_voltage_l2" },
-            "properties": [{ "id": "displayName", "value": "L2" }]
-          },
-          {
-            "matcher": { "id": "byName", "options": "ac_voltage_l3" },
-            "properties": [{ "id": "displayName", "value": "L3" }]
-          }
-        ]
-      },
-      "options": {
-        "tooltip": { "mode": "multi", "sort": "none" },
-        "legend": { "displayMode": "list", "placement": "bottom" }
-      }
-    },
-
-    {
-      "id": 104,
-      "type": "row",
-      "title": "Energia i consum",
-      "gridPos": { "x": 0, "y": 68, "w": 24, "h": 1 },
-      "collapsed": false,
-      "panels": []
-    },
-    {
-      "id": 19,
-      "type": "timeseries",
-      "title": "Energia diària últims 30 dies",
-      "gridPos": { "x": 0, "y": 69, "w": 16, "h": 8 },
-      "datasource": { "type": "influxdb", "uid": "influxdb" },
-      "timeFrom": "30d",
-      "targets": [
-        {
-          "datasource": { "type": "influxdb", "uid": "influxdb" },
-          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r._field == \"yield_total\")\n  |> aggregateWindow(every: 1d, fn: spread, createEmpty: false)\n  |> group()\n  |> aggregateWindow(every: 1d, fn: sum, createEmpty: false)",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "kwatth",
-          "color": { "mode": "fixed", "fixedColor": "super-light-yellow" },
+          "unit": "currencyEUR",
+          "decimals": 4,
           "custom": {
             "drawStyle": "bars",
             "barAlignment": 0,
+            "fillOpacity": 60,
             "lineWidth": 0,
-            "fillOpacity": 80,
-            "gradientMode": "scheme",
-            "showPoints": "never"
-          }
+            "pointSize": 3,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": { "mode": "none" },
+            "axisPlacement": "auto",
+            "axisSoftMin": 0,
+            "gradientMode": "scheme"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "value": null, "color": "#0C4DA2" },
+              { "value": 0.10, "color": "#f1c40f" },
+              { "value": 0.15, "color": "#E63946" }
+            ]
+          },
+          "color": { "mode": "thresholds" }
         },
         "overrides": [
           {
-            "matcher": { "id": "byName", "options": "yield_total" },
-            "properties": [{ "id": "displayName", "value": "Energia diària" }]
+            "matcher": { "id": "byName", "options": "Tarifa fixa" },
+            "properties": [
+              { "id": "color", "value": { "mode": "fixed", "fixedColor": "#002B5B" } },
+              { "id": "custom.drawStyle", "value": "line" },
+              { "id": "custom.lineStyle", "value": { "fill": "dash", "dash": [10, 5] } },
+              { "id": "custom.lineWidth", "value": 2 },
+              { "id": "custom.fillOpacity", "value": 0 },
+              { "id": "custom.pointSize", "value": 0 }
+            ]
           }
         ]
       },
       "options": {
-        "tooltip": { "mode": "single", "sort": "none" },
+        "tooltip": { "mode": "multi", "sort": "desc" },
         "legend": { "displayMode": "list", "placement": "bottom" }
-      }
-    },
-    {
-      "id": 20,
-      "type": "stat",
-      "title": "Autoconsum avui",
-      "gridPos": { "x": 16, "y": 69, "w": 4, "h": 8 },
-      "datasource": { "type": "influxdb", "uid": "influxdb" },
+      },
       "targets": [
         {
+          "refId": "A",
           "datasource": { "type": "influxdb", "uid": "influxdb" },
-          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r.inverter == \"piko_15\" or not exists r.inverter)\n  |> drop(columns: [\"inverter\"])\n  |> group(columns: [\"_field\"])\n  |> filter(fn: (r) => r._field == \"self_consumption_daily\")\n  |> last()",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "watth",
-          "color": { "mode": "fixed", "fixedColor": "light-orange" },
-          "thresholds": { "mode": "absolute", "steps": [{ "value": null, "color": "light-orange" }] }
+          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"omie_prices\")\n  |> filter(fn: (r) => r._field == \"price_eur_kwh\")\n  |> set(key: \"_field\", value: \"OMIE €/kWh\")"
         },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "textMode": "auto"
-      }
+        {
+          "refId": "B",
+          "datasource": { "type": "influxdb", "uid": "influxdb" },
+          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"omie_prices\")\n  |> filter(fn: (r) => r._field == \"price_eur_kwh\")\n  |> map(fn: (r) => ({r with _value: ${electricity_cost}, _field: \"Tarifa fixa\"}))"
+        }
+      ]
     },
     {
-      "id": 21,
-      "type": "stat",
-      "title": "Taxa d'autoconsum",
-      "gridPos": { "x": 20, "y": 69, "w": 4, "h": 8 },
-      "datasource": { "type": "influxdb", "uid": "influxdb" },
-      "targets": [
+      "type": "row",
+      "id": 400,
+      "title": "ESTAT INVERSORS",
+      "collapsed": true,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 31 },
+      "panels": [
         {
+          "id": 40,
+          "type": "stat",
+          "title": "PIKO 15 estat",
+          "description": "Estat operatiu de l'inversor PIKO 15",
+          "gridPos": { "h": 3, "w": 4, "x": 0, "y": 32 },
           "datasource": { "type": "influxdb", "uid": "influxdb" },
-          "query": "from(bucket: \"solar\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"piko\")\n  |> filter(fn: (r) => r.inverter == \"piko_15\" or not exists r.inverter)\n  |> drop(columns: [\"inverter\"])\n  |> group(columns: [\"_field\"])\n  |> filter(fn: (r) => r._field == \"self_consumption_rate_daily\")\n  |> last()",
-          "refId": "A"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "percent",
-          "decimals": 1,
-          "color": { "mode": "thresholds" },
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "value": null, "color": "red" },
-              { "value": 30, "color": "orange" },
-              { "value": 60, "color": "yellow" },
-              { "value": 80, "color": "green" }
-            ]
-          }
+          "fieldConfig": {
+            "defaults": {
+              "mappings": [
+                { "type": "value", "options": { "0": { "text": "Off", "color": "#D4D4D4" } } },
+                { "type": "value", "options": { "1": { "text": "Idle", "color": "#f1c40f" } } },
+                { "type": "value", "options": { "2": { "text": "Starting", "color": "#f1c40f" } } },
+                { "type": "value", "options": { "3": { "text": "MPP", "color": "#0C4DA2" } } },
+                { "type": "value", "options": { "4": { "text": "Regulated", "color": "#0C4DA2" } } },
+                { "type": "value", "options": { "5": { "text": "Fault", "color": "#E63946" } } }
+              ],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "value": null, "color": "#D4D4D4" },
+                  { "value": 3, "color": "#0C4DA2" },
+                  { "value": 5, "color": "#E63946" }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+            "orientation": "auto",
+            "textMode": "value",
+            "colorMode": "background",
+            "graphMode": "none",
+            "justifyMode": "center"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": { "type": "influxdb", "uid": "influxdb" },
+              "query": "from(bucket: \"solar\")\n  |> range(start: -5m)\n  |> filter(fn: (r) => r._measurement == \"piko\" and r.inverter == \"piko_15\")\n  |> filter(fn: (r) => r._field == \"status\")\n  |> last()"
+            }
+          ]
         },
-        "overrides": []
-      },
+        {
+          "id": 41,
+          "type": "stat",
+          "title": "PIKO 15 potència",
+          "description": "Potència AC actual com a % de la capacitat nominal (15 kW)",
+          "gridPos": { "h": 3, "w": 4, "x": 4, "y": 32 },
+          "datasource": { "type": "influxdb", "uid": "influxdb" },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent",
+              "decimals": 1,
+              "min": 0,
+              "max": 100,
+              "color": { "mode": "fixed", "fixedColor": "#0C4DA2" },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "value": null, "color": "#D4D4D4" },
+                  { "value": 10, "color": "#0C4DA2" }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+            "orientation": "auto",
+            "textMode": "value",
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": { "type": "influxdb", "uid": "influxdb" },
+              "query": "from(bucket: \"solar\")\n  |> range(start: -5m)\n  |> filter(fn: (r) => r._measurement == \"piko\" and r.inverter == \"piko_15\")\n  |> filter(fn: (r) => r._field == \"ac_power_total\")\n  |> last()\n  |> map(fn: (r) => ({r with _value: r._value / 15000.0 * 100.0}))"
+            }
+          ]
+        },
+        {
+          "id": 42,
+          "type": "stat",
+          "title": "PIKO CI 50 estat",
+          "description": "Estat operatiu de l'inversor PIKO CI 50",
+          "gridPos": { "h": 3, "w": 4, "x": 8, "y": 32 },
+          "datasource": { "type": "influxdb", "uid": "influxdb" },
+          "fieldConfig": {
+            "defaults": {
+              "mappings": [
+                { "type": "value", "options": { "0": { "text": "Off", "color": "#D4D4D4" } } },
+                { "type": "value", "options": { "1": { "text": "Idle", "color": "#f1c40f" } } },
+                { "type": "value", "options": { "2": { "text": "Starting", "color": "#f1c40f" } } },
+                { "type": "value", "options": { "3": { "text": "MPP", "color": "#0C4DA2" } } },
+                { "type": "value", "options": { "4": { "text": "Regulated", "color": "#0C4DA2" } } },
+                { "type": "value", "options": { "5": { "text": "Fault", "color": "#E63946" } } }
+              ],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "value": null, "color": "#D4D4D4" },
+                  { "value": 3, "color": "#0C4DA2" },
+                  { "value": 5, "color": "#E63946" }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+            "orientation": "auto",
+            "textMode": "value",
+            "colorMode": "background",
+            "graphMode": "none",
+            "justifyMode": "center"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": { "type": "influxdb", "uid": "influxdb" },
+              "query": "from(bucket: \"solar\")\n  |> range(start: -5m)\n  |> filter(fn: (r) => r._measurement == \"piko\" and r.inverter == \"piko_ci_50\")\n  |> filter(fn: (r) => r._field == \"status\")\n  |> last()"
+            }
+          ]
+        },
+        {
+          "id": 43,
+          "type": "stat",
+          "title": "PIKO CI 50 potència",
+          "description": "Potència AC actual com a % de la capacitat nominal (50 kW)",
+          "gridPos": { "h": 3, "w": 4, "x": 12, "y": 32 },
+          "datasource": { "type": "influxdb", "uid": "influxdb" },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percent",
+              "decimals": 1,
+              "min": 0,
+              "max": 100,
+              "color": { "mode": "fixed", "fixedColor": "#0C4DA2" },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "value": null, "color": "#D4D4D4" },
+                  { "value": 10, "color": "#0C4DA2" }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+            "orientation": "auto",
+            "textMode": "value",
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": { "type": "influxdb", "uid": "influxdb" },
+              "query": "from(bucket: \"solar\")\n  |> range(start: -5m)\n  |> filter(fn: (r) => r._measurement == \"piko\" and r.inverter == \"piko_ci_50\")\n  |> filter(fn: (r) => r._field == \"ac_power_total\")\n  |> last()\n  |> map(fn: (r) => ({r with _value: r._value / 50000.0 * 100.0}))"
+            }
+          ]
+        },
+        {
+          "id": 44,
+          "type": "stat",
+          "title": "Freqüència xarxa",
+          "description": "Freqüència de la xarxa elèctrica (KSEM)",
+          "gridPos": { "h": 3, "w": 4, "x": 16, "y": 32 },
+          "datasource": { "type": "influxdb", "uid": "influxdb" },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "hertz",
+              "decimals": 2,
+              "color": { "mode": "fixed", "fixedColor": "#D4D4D4" },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "value": null, "color": "#E63946" },
+                  { "value": 49.8, "color": "#D4D4D4" },
+                  { "value": 50.2, "color": "#E63946" }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+            "orientation": "auto",
+            "textMode": "value",
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto"
+          },
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": { "type": "influxdb", "uid": "influxdb" },
+              "query": "from(bucket: \"solar\")\n  |> range(start: -5m)\n  |> filter(fn: (r) => r._measurement == \"ksem\")\n  |> filter(fn: (r) => r._field == \"frequency\")\n  |> last()"
+            }
+          ]
+        },
+        {
+          "id": 45,
+          "type": "table",
+          "title": "Potència per fase",
+          "description": "Potència activa per fase del KSEM (L1/L2/L3)",
+          "gridPos": { "h": 3, "w": 4, "x": 20, "y": 32 },
+          "datasource": { "type": "influxdb", "uid": "influxdb" },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "watt",
+              "decimals": 0,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "value": null, "color": "#E63946" },
+                  { "value": 0, "color": "#2ecc71" }
+                ]
+              },
+              "custom": {
+                "align": "center",
+                "displayMode": "color-text"
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "showHeader": true,
+            "footer": { "show": false },
+            "frameIndex": 0
+          },
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": { "_start": true, "_stop": true, "_measurement": true, "_time": true },
+                "renameByName": {
+                  "active_power_l1": "L1",
+                  "active_power_l2": "L2",
+                  "active_power_l3": "L3"
+                }
+              }
+            }
+          ],
+          "targets": [
+            {
+              "refId": "A",
+              "datasource": { "type": "influxdb", "uid": "influxdb" },
+              "query": "from(bucket: \"solar\")\n  |> range(start: -5m)\n  |> filter(fn: (r) => r._measurement == \"ksem\")\n  |> filter(fn: (r) => r._field == \"active_power_l1\" or r._field == \"active_power_l2\" or r._field == \"active_power_l3\")\n  |> last()\n  |> pivot(rowKey: [\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 99,
+      "type": "text",
+      "title": "",
+      "gridPos": { "h": 2, "w": 24, "x": 0, "y": 32 },
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "textMode": "auto"
+        "mode": "markdown",
+        "content": "### [Analitzar factures Iberdrola](http://localhost:5000)\nPuja i analitza les factures elèctriques amb comparació de preus OMIE",
+        "code": { "language": "plaintext", "showLineNumbers": false, "showMiniMap": false }
       }
     }
-  ]
+  ],
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "links": [],
+  "style": "dark"
 }

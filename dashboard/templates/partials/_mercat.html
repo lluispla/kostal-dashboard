@@ -1,0 +1,125 @@
+<!-- Mercat OMIE — Comparativa tarifa fixa vs indexada real -->
+<div class="section">
+    <div class="section-header">
+        <span class="icon">&#128200;</span>
+        <h2>Mercat electric OMIE</h2>
+    </div>
+
+    <!-- Row 1 — Current prices -->
+    <div class="kpi-grid">
+        <!-- Preu OMIE spot -->
+        <div class="kpi-card">
+            <div class="label">Preu OMIE spot</div>
+            <div class="description">Preu majorista d'electricitat ara mateix</div>
+            <div class="value val-navy">
+                <span data-field="mercat.omie_eur_mwh" data-fmt="2">{{ "%.2f"|format(d.mercat.omie_eur_mwh) }}</span>
+                <span class="unit">&euro;/MWh</span>
+            </div>
+        </div>
+
+        <!-- Periode actual + cost real indexat -->
+        <div class="kpi-card">
+            <div class="label">Periode actual</div>
+            <div class="description">Preu indexat real = OMIE + peatges + carregues + marge</div>
+            <div class="value val-red">
+                <span class="period-badge" data-field="mercat.current_period">{{ d.mercat.current_period }}</span>
+                <span data-field="mercat.current_indexed_real" data-fmt="5">{{ "%.5f"|format(d.mercat.current_indexed_real) }}</span>
+                <span class="unit">&euro;/kWh</span>
+            </div>
+        </div>
+
+        <!-- Tarifa fixa -->
+        <div class="kpi-card">
+            <div class="label">Tarifa fixa</div>
+            <div class="description">Tarifa contractada actual (referencia)</div>
+            <div class="value val-blue">
+                <span>{{ "%.4f"|format(d.mercat.fixed_rate) }}</span>
+                <span class="unit">&euro;/kWh</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Row 2 — Today's comparison -->
+    <div class="kpi-grid">
+        <div class="kpi-card">
+            <div class="label">Cost fix avui</div>
+            <div class="description">{{ d.mercat.imported_kwh_today }} kWh importats &times; tarifa fixa (ponderat horari)</div>
+            <div class="value val-blue">
+                <span data-field="mercat.cost_fixed_today" data-fmt="2">{{ "%.2f"|format(d.mercat.cost_fixed_today) }}</span>
+                <span class="unit">&euro;</span>
+            </div>
+        </div>
+
+        <div class="kpi-card">
+            <div class="label">Cost indexat avui</div>
+            <div class="description">Mateixa energia valorada amb tarifa indexada real</div>
+            <div class="value val-red">
+                <span data-field="mercat.cost_indexed_today" data-fmt="2">{{ "%.2f"|format(d.mercat.cost_indexed_today) }}</span>
+                <span class="unit">&euro;</span>
+            </div>
+        </div>
+
+        <div class="kpi-card">
+            <div class="label">Diferencia avui</div>
+            <div class="description">Positiu = la indexada es mes barata</div>
+            <div class="value {% if d.mercat.diff_today >= 0 %}val-green{% else %}val-red{% endif %}" data-diff-color>
+                <span data-field="mercat.diff_today" data-fmt="2">{{ "%.2f"|format(d.mercat.diff_today) }}</span>
+                <span class="unit">&euro;</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Row 3 — Monthly cumulative -->
+    <div class="kpi-grid">
+        <div class="kpi-card">
+            <div class="label">Cost fix mensual</div>
+            <div class="description">Acumulat del mes amb tarifa fixa</div>
+            <div class="value val-blue">
+                <span data-field="mercat.cost_fixed_month" data-fmt="2">{{ "%.2f"|format(d.mercat.cost_fixed_month) }}</span>
+                <span class="unit">&euro;</span>
+            </div>
+        </div>
+
+        <div class="kpi-card">
+            <div class="label">Cost indexat mensual</div>
+            <div class="description">Acumulat del mes amb tarifa indexada real</div>
+            <div class="value val-red">
+                <span data-field="mercat.cost_indexed_month" data-fmt="2">{{ "%.2f"|format(d.mercat.cost_indexed_month) }}</span>
+                <span class="unit">&euro;</span>
+            </div>
+        </div>
+
+        <div class="kpi-card">
+            <div class="label">Diferencia mensual</div>
+            <div class="description">Metrica clau per decidir canvi de tarifa</div>
+            <div class="value {% if d.mercat.diff_month >= 0 %}val-green{% else %}val-red{% endif %}" data-diff-color>
+                <span data-field="mercat.diff_month" data-fmt="2">{{ "%.2f"|format(d.mercat.diff_month) }}</span>
+                <span class="unit">&euro;</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Exceptional day badge -->
+    {% if d.mercat.day_flag != "normal" %}
+    <div style="margin-bottom: 0.75rem;">
+        {% if d.mercat.day_flag == "cheap" %}
+        <span class="status-badge status-ok" data-field-badge="mercat.day_flag">
+            Dia barat &mdash; OMIE mitja {{ "%.1f"|format(d.mercat.omie_avg_today) }} &euro;/MWh
+        </span>
+        {% else %}
+        <span class="status-badge status-error" data-field-badge="mercat.day_flag">
+            Dia car &mdash; OMIE mitja {{ "%.1f"|format(d.mercat.omie_avg_today) }} &euro;/MWh
+        </span>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- OMIE hourly chart -->
+    <div class="chart-wrap dash-chart-wrap" id="dash-wrap-omie">
+        <h3>Preu OMIE horari &mdash; avui (barres = spot, linia vermella = indexat real, linia discontínua = tarifa fixa)</h3>
+        <button class="chart-btn fullscreen-btn" onclick="toggleDashFullscreen('dash-wrap-omie')">&#x26F6;</button>
+        <div style="height: 250px;">
+            <canvas id="chart-omie"></canvas>
+        </div>
+    </div>
+</div>

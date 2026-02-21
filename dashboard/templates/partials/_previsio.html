@@ -1,0 +1,85 @@
+<!-- Previsio factura — Projecció mensual i anual per tresoreria -->
+<div class="section">
+    <div class="section-header">
+        <span class="icon">&#128176;</span>
+        <h2>Previsi&oacute; factura</h2>
+    </div>
+
+    <!-- Row 1 — Monthly projection -->
+    <div class="kpi-grid">
+        <div class="kpi-card">
+            <div class="label">Factura mensual (fixa)</div>
+            <div class="description">
+                Energia {{ "%.0f"|format(d.previsio.mensual_fix.energia) }} +
+                Pot&egrave;ncia {{ "%.0f"|format(d.previsio.mensual_fix.potencia) }} +
+                Imp. {{ "%.0f"|format(d.previsio.mensual_fix.impost_electric) }} +
+                Fixes {{ "%.0f"|format(d.previsio.mensual_fix.carregues_fixes) }} +
+                IVA {{ "%.0f"|format(d.previsio.mensual_fix.iva) }}
+                &minus; Comp. {{ "%.0f"|format(d.previsio.mensual_fix.compensacio) }}
+            </div>
+            <div class="value val-navy">
+                <span data-field="previsio.mensual_fix.net" data-fmt="2">{{ "%.2f"|format(d.previsio.mensual_fix.net) }}</span>
+                <span class="unit">&euro;</span>
+            </div>
+        </div>
+
+        <div class="kpi-card">
+            <div class="label">Factura mensual (indexada)</div>
+            <div class="description">
+                Energia {{ "%.0f"|format(d.previsio.mensual_indexat.energia) }} +
+                Pot&egrave;ncia {{ "%.0f"|format(d.previsio.mensual_indexat.potencia) }} +
+                Imp. {{ "%.0f"|format(d.previsio.mensual_indexat.impost_electric) }} +
+                Fixes {{ "%.0f"|format(d.previsio.mensual_indexat.carregues_fixes) }} +
+                IVA {{ "%.0f"|format(d.previsio.mensual_indexat.iva) }}
+                &minus; Comp. {{ "%.0f"|format(d.previsio.mensual_indexat.compensacio) }}
+            </div>
+            <div class="value val-navy">
+                <span data-field="previsio.mensual_indexat.net" data-fmt="2">{{ "%.2f"|format(d.previsio.mensual_indexat.net) }}</span>
+                <span class="unit">&euro;</span>
+            </div>
+        </div>
+
+        <div class="kpi-card">
+            <div class="label">Difer&egrave;ncia mensual</div>
+            <div class="description">Positiu = la indexada &eacute;s m&eacute;s barata</div>
+            <div class="value {% if d.previsio.mensual_fix.net - d.previsio.mensual_indexat.net >= 0 %}val-green{% else %}val-red{% endif %}" data-diff-color>
+                <span data-field="previsio.diff_mensual" data-fmt="2">{{ "%.2f"|format(d.previsio.mensual_fix.net - d.previsio.mensual_indexat.net) }}</span>
+                <span class="unit">&euro;</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Row 2 — Annual projection -->
+    <div class="kpi-grid">
+        <div class="kpi-card">
+            <div class="label">Factura anual (fixa)</div>
+            <div class="description">Projecci&oacute; mensual &times; 12</div>
+            <div class="value val-navy">
+                <span data-field="previsio.anual_fix_net" data-fmt="2">{{ "%.2f"|format(d.previsio.anual_fix_net) }}</span>
+                <span class="unit">&euro;</span>
+            </div>
+        </div>
+
+        <div class="kpi-card">
+            <div class="label">Factura anual (indexada)</div>
+            <div class="description">Projecci&oacute; mensual &times; 12</div>
+            <div class="value val-navy">
+                <span data-field="previsio.anual_indexat_net" data-fmt="2">{{ "%.2f"|format(d.previsio.anual_indexat_net) }}</span>
+                <span class="unit">&euro;</span>
+            </div>
+        </div>
+
+        <div class="kpi-card">
+            <div class="label">Estalvi anual amb indexada</div>
+            <div class="description">M&egrave;trica clau per tresoreria</div>
+            <div class="value {% if d.previsio.estalvi_anual_indexat >= 0 %}val-green{% else %}val-red{% endif %}" data-diff-color>
+                <span data-field="previsio.estalvi_anual_indexat" data-fmt="2">{{ "%.2f"|format(d.previsio.estalvi_anual_indexat) }}</span>
+                <span class="unit">&euro;</span>
+            </div>
+        </div>
+    </div>
+
+    <p style="font-size: 0.7rem; color: var(--muted); margin: 0;">
+        Projecci&oacute; basada en <span data-field="previsio.days_elapsed" data-fmt="1">{{ "%.1f"|format(d.previsio.days_elapsed) }}</span> dies de dades. Extrapolaci&oacute; lineal.
+    </p>
+</div>

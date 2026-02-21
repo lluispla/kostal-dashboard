@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}Hist&ograve;ric{% endblock %}
+
+{% block header_right %}
+<span>Dades hist&ograve;riques</span>
+{% endblock %}
+
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3"></script>
+<script src="https://cdn.jsdelivr.net/npm/hammerjs@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2"></script>
+{% endblock %}
+
+{% block content %}
+<!-- Range selector -->
+<div class="range-bar">
+    <button class="range-btn active" data-range="7d">7d</button>
+    <button class="range-btn" data-range="30d">30d</button>
+    <button class="range-btn" data-range="90d">90d</button>
+    <button class="range-btn" data-range="1y">1y</button>
+    <button class="range-btn" data-range="all">Tot</button>
+    <span style="flex:1"></span>
+    <button class="range-btn" id="toggle-ema">EMA</button>
+</div>
+
+<!-- Cost efectiu badge -->
+<div class="cost-badge" id="cost-badge">
+    El teu cost efectiu: <strong id="kpi-effective">--</strong> &euro;/kWh
+    &nbsp;&middot;&nbsp;
+    Preu indexat mitj&agrave;: <strong id="kpi-indexed-avg">--</strong> &euro;/kWh
+</div>
+
+<!-- Summary KPIs -->
+<div class="historic-summary" id="historic-summary">
+    <div class="kpi-card">
+        <div class="label">Generaci&oacute; total</div>
+        <div class="value val-blue"><span id="kpi-gen">--</span><span class="unit">kWh</span></div>
+    </div>
+    <div class="kpi-card">
+        <div class="label">Consum total</div>
+        <div class="value val-navy"><span id="kpi-cons">--</span><span class="unit">kWh</span></div>
+    </div>
+    <div class="kpi-card">
+        <div class="label">Autoconsum</div>
+        <div class="value val-green"><span id="kpi-self">--</span><span class="unit">%</span></div>
+    </div>
+    <div class="kpi-card">
+        <div class="label">Preu indexat mitj&agrave;</div>
+        <div class="value val-red"><span id="kpi-omie">--</span><span class="unit">&euro;/kWh</span></div>
+    </div>
+</div>
+
+<!-- Chart 1: Producció i Consum -->
+<div class="historic-chart-wrap" id="chart-wrap-1">
+    <h3>Producci&oacute; i Consum</h3>
+    <button class="chart-btn fullscreen-btn" data-target="chart-wrap-1">&#x26F6;</button>
+    <button class="chart-btn reset-zoom" id="reset-zoom-1">Reset zoom</button>
+    <canvas id="chart-gen-cons"></canvas>
+</div>
+
+<!-- Chart 2: Importació i Exportació -->
+<div class="historic-chart-wrap" id="chart-wrap-2">
+    <h3>Importaci&oacute; i Exportaci&oacute;</h3>
+    <button class="chart-btn fullscreen-btn" data-target="chart-wrap-2">&#x26F6;</button>
+    <button class="chart-btn reset-zoom" id="reset-zoom-2">Reset zoom</button>
+    <canvas id="chart-imp-exp"></canvas>
+</div>
+
+<!-- Chart 3: Preu OMIE -->
+<div class="historic-chart-wrap" id="chart-wrap-3">
+    <h3>Preu Indexat (OMIE + peatges + c&agrave;rrecs + marge)</h3>
+    <button class="chart-btn fullscreen-btn" data-target="chart-wrap-3">&#x26F6;</button>
+    <button class="chart-btn reset-zoom" id="reset-zoom-3">Reset zoom</button>
+    <canvas id="chart-omie"></canvas>
+</div>
+
+<!-- Zoom hint -->
+<div class="zoom-hint">Scroll per fer zoom &middot; Arrossega per moure</div>
+
+<!-- Loading overlay -->
+<div class="historic-loading" id="historic-loading">Carregant dades...</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/historic.js') }}"></script>
+{% endblock %}

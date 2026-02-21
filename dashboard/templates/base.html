@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Planta Solar{% endblock %} — Binomi Produccions</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <!-- Header -->
+    <div class="header">
+        <div class="header-left">
+            <div>
+                <h1>Planta Solar 65 kW</h1>
+                <div class="subtitle">Binomi Produccions SL</div>
+            </div>
+        </div>
+        <div class="header-right">
+            {% block header_right %}
+            <span><span class="live-dot"></span> En directe</span>
+            <span>Actualitzat: <span id="last-update">{{ d.last_update if d is defined else '--:--:--' }}</span></span>
+            {% endblock %}
+        </div>
+    </div>
+
+    <!-- Martini Racing stripe -->
+    <div class="martini-stripe"></div>
+
+    <!-- Navigation -->
+    <nav class="nav">
+        <a href="{{ url_for('index') }}" class="{% if request.endpoint == 'index' %}active{% endif %}">Dashboard</a>
+        <a href="{{ url_for('factures') }}" class="{% if request.endpoint in ('factures', 'factures_upload', 'factures_analysis') %}active{% endif %}">Factures</a>
+        <a href="{{ url_for('comparador') }}" class="{% if request.endpoint == 'comparador' %}active{% endif %}">Comparador</a>
+        <a href="{{ url_for('historic') }}" class="{% if request.endpoint == 'historic' %}active{% endif %}">Hist&ograve;ric</a>
+        <a href="{{ url_for('configuracio') }}" class="{% if request.endpoint in ('configuracio', 'save_configuracio') %}active{% endif %}">Configuraci&oacute;</a>
+    </nav>
+
+    <!-- Content -->
+    <div class="container">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for category, message in messages %}
+        <div class="flash-{{ category }}">{{ message }}</div>
+        {% endfor %}
+        {% endwith %}
+
+        {% block content %}{% endblock %}
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+        Binomi Produccions SL &mdash; Planta Solar PIKO 15 + PIKO CI 50 &mdash; 65 kWp
+    </div>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>

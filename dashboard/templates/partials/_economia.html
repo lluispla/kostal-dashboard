@@ -1,0 +1,59 @@
+<!-- Economia — 5 KPI cards -->
+<div class="section">
+    <div class="section-header">
+        <span class="icon">&#128176;</span>
+        <h2>Economia</h2>
+    </div>
+
+    <div class="kpi-grid">
+        <!-- Estalvi autoconsum -->
+        <div class="kpi-card">
+            <div class="label">Estalvi autoconsum avui</div>
+            <div class="description">Energia autoconsumida ({{ d.economia.self_consumption_kwh_today }} kWh) &times; tarifa fixa contractada</div>
+            <div class="value val-blue">
+                <span data-field="economia.savings_today" data-fmt="2">{{ "%.2f"|format(d.economia.savings_today) }}</span>
+                <span class="unit">&euro;</span>
+            </div>
+        </div>
+
+        <!-- Ingressos injecció -->
+        <div class="kpi-card">
+            <div class="label">Ingressos injecció avui</div>
+            <div class="description">Energia exportada a xarxa ({{ d.economia.export_kwh_today }} kWh) &times; preu compensació</div>
+            <div class="value val-green">
+                <span data-field="economia.injection_income_today" data-fmt="2">{{ "%.2f"|format(d.economia.injection_income_today) }}</span>
+                <span class="unit">&euro;</span>
+            </div>
+        </div>
+
+        <!-- Benefici total avui -->
+        <div class="kpi-card">
+            <div class="label">Benefici total avui</div>
+            <div class="description">Estalvi autoconsum + ingressos injecció del dia</div>
+            <div class="value val-blue">
+                <span data-field="economia.total_benefit_today" data-fmt="2">{{ "%.2f"|format(d.economia.total_benefit_today) }}</span>
+                <span class="unit">&euro;</span>
+            </div>
+        </div>
+
+        <!-- Benefici mensual -->
+        <div class="kpi-card">
+            <div class="label">Benefici mensual acumulat</div>
+            <div class="description">Suma d'estalvi + injecció des de l'1 del mes</div>
+            <div class="value val-navy">
+                <span data-field="economia.monthly_benefit" data-fmt="2">{{ "%.2f"|format(d.economia.monthly_benefit) }}</span>
+                <span class="unit">&euro;</span>
+            </div>
+        </div>
+
+        <!-- Cost efectiu -->
+        <div class="kpi-card">
+            <div class="label">Cost efectiu &euro;/kWh</div>
+            <div class="description">Preu real per kWh consumit, tenint en compte l'autoconsum solar</div>
+            <div class="value val-navy">
+                <span data-field="economia.effective_cost_kwh" data-fmt="4">{{ "%.4f"|format(d.economia.effective_cost_kwh) }}</span>
+                <span class="unit">&euro;/kWh</span>
+            </div>
+        </div>
+    </div>
+</div>

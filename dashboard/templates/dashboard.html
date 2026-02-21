@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3"></script>
+{% endblock %}
+
+{% block content %}
+{% include "partials/_economia.html" %}
+
+<div class="martini-stripe-thin" style="margin-bottom: 1.5rem;"></div>
+
+{% include "partials/_energia.html" %}
+
+<div class="martini-stripe-thin" style="margin-bottom: 1.5rem;"></div>
+
+{% include "partials/_mercat.html" %}
+
+<div class="martini-stripe-thin" style="margin-bottom: 1.5rem;"></div>
+
+{% include "partials/_previsio.html" %}
+
+<div class="martini-stripe-thin" style="margin-bottom: 1.5rem;"></div>
+
+{% include "partials/_inversors.html" %}
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/charts.js') }}"></script>
+<script>
+    // Initial chart data from server-side render
+    const initData = {{ d|tojson }};
+
+    initPowerCurve(initData.energia.power_curve);
+    initYield30d(initData.energia.daily_yield_30d);
+    initOmieHourly(initData.mercat);
+
+    // Escape key exits fullscreen on dashboard
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') {
+            document.querySelectorAll('.dash-fullscreen').forEach(function (el) {
+                el.classList.remove('dash-fullscreen');
+            });
+            setTimeout(function () {
+                [chartGen, chartCons, chartGrid, chartYield, chartOmie].forEach(function (c) {
+                    if (c) c.resize();
+                });
+            }, 50);
+        }
+    });
+</script>
+<script src="{{ url_for('static', filename='js/refresh.js') }}"></script>
+{% endblock %}

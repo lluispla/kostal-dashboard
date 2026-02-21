@@ -1,0 +1,238 @@
+{% extends "base.html" %}
+
+{% block title %}Configuraci&oacute;{% endblock %}
+
+{% block header_right %}
+<span>Configuraci&oacute; de Tarifes</span>
+{% endblock %}
+
+{% block content %}
+
+<form id="settings-form" method="POST" action="{{ url_for('save_configuracio') }}">
+
+<!-- Energy rates -->
+<div class="section">
+    <div class="section-header">
+        <span class="icon">&#9889;</span>
+        <h2>Preu d'Energia (contracte fix actual)</h2>
+    </div>
+    <p class="section-help">Introdueix el preu d'energia del teu contracte. Si el preu &eacute;s el mateix per tots els per&iacute;odes,
+        escriu-lo al camp &laquo;Preu &uacute;nic&raquo; i prem &laquo;Aplicar a tots&raquo;.</p>
+
+    <div class="settings-card">
+        <div class="settings-row" style="align-items: flex-end;">
+            <div class="settings-field" style="flex:2;">
+                <label for="s-flat-rate">Preu &uacute;nic (EUR/kWh)</label>
+                <input type="number" id="s-flat-rate" step="0.000001" min="0"
+                       value="{{ p.energy.effective_rate_eur_kwh }}" placeholder="0.154">
+            </div>
+            <button type="button" class="btn btn-sm" id="btn-apply-flat-rate">Aplicar a tots</button>
+        </div>
+
+        <div class="settings-row settings-periods">
+            {% for period in ['P1','P2','P3','P4','P5','P6'] %}
+            <div class="settings-field">
+                <label for="s-rate-{{ period }}">{{ period }} (EUR/kWh)</label>
+                <input type="number" id="s-rate-{{ period }}" name="rate_{{ period }}"
+                       step="0.000001" min="0"
+                       value="{{ p.energy.rates_eur_kwh[period] if p.energy.rates_eur_kwh is defined else p.energy.effective_rate_eur_kwh }}">
+            </div>
+            {% endfor %}
+        </div>
+
+        <div class="settings-row">
+            <div class="settings-field" style="max-width:200px;">
+                <label for="s-discount">Descompte (%)</label>
+                <input type="number" id="s-discount" name="discount_pct"
+                       step="0.1" min="0" max="100"
+                       value="{{ p.energy.discount_pct }}">
+            </div>
+            <div class="settings-field" style="max-width:200px;">
+                <label for="s-base-rate">Preu base (EUR/kWh)</label>
+                <input type="number" id="s-base-rate" name="base_rate_eur_kwh"
+                       step="0.000001" min="0"
+                       value="{{ p.energy.base_rate_eur_kwh }}">
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="martini-stripe-thin"></div>
+
+<!-- Contracted power and charges -->
+<div class="section">
+    <div class="section-header">
+        <span class="icon">&#9883;</span>
+        <h2>Pot&egrave;ncia Contractada</h2>
+    </div>
+    <p class="section-help">kW contractats i preu per kW/dia a cada per&iacute;ode. Normalment els preus de pot&egrave;ncia s&oacute;n regulats (iguals per totes les comercialitzadores).</p>
+
+    <div class="settings-card">
+        <h4 class="settings-subtitle">kW contractats per per&iacute;ode</h4>
+        <div class="settings-row settings-periods">
+            {% for period in ['P1','P2','P3','P4','P5','P6'] %}
+            <div class="settings-field">
+                <label for="s-power-{{ period }}">{{ period }} (kW)</label>
+                <input type="number" id="s-power-{{ period }}" name="power_{{ period }}"
+                       step="0.1" min="0"
+                       value="{{ p.contracted_power_kw[period] }}">
+            </div>
+            {% endfor %}
+        </div>
+
+        <h4 class="settings-subtitle" style="margin-top:1rem;">Preu de pot&egrave;ncia (EUR/kW/dia)</h4>
+        <div class="settings-row settings-periods">
+            {% for period in ['P1','P2','P3','P4','P5','P6'] %}
+            <div class="settings-field">
+                <label for="s-pcharge-{{ period }}">{{ period }}</label>
+                <input type="number" id="s-pcharge-{{ period }}" name="pcharge_{{ period }}"
+                       step="0.000001" min="0"
+                       value="{{ p.power_charges_eur_kw_day[period] }}">
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<div class="martini-stripe-thin"></div>
+
+<!-- Taxes and fixed charges -->
+<div class="section">
+    <div class="section-header">
+        <span class="icon">&#128176;</span>
+        <h2>Impostos i C&agrave;rregues Fixes</h2>
+    </div>
+
+    <div class="settings-card">
+        <div class="settings-row">
+            <div class="settings-field">
+                <label for="s-elec-tax">Impost el&egrave;ctric (%)</label>
+                <input type="number" id="s-elec-tax" name="electricity_tax_pct"
+                       step="0.01" min="0"
+                       value="{{ p.taxes.electricity_tax_pct }}">
+            </div>
+            <div class="settings-field">
+                <label for="s-iva">IVA (%)</label>
+                <input type="number" id="s-iva" name="iva_pct"
+                       step="0.01" min="0"
+                       value="{{ p.taxes.iva_pct }}">
+            </div>
+        </div>
+        <div class="settings-row">
+            <div class="settings-field">
+                <label for="s-rental">Lloguer equips (EUR/dia)</label>
+                <input type="number" id="s-rental" name="equipment_rental"
+                       step="0.001" min="0"
+                       value="{{ p.fixed_charges_eur_day.equipment_rental }}">
+            </div>
+            <div class="settings-field">
+                <label for="s-bono">Bo social (EUR/dia)</label>
+                <input type="number" id="s-bono" name="bono_social"
+                       step="0.001" min="0"
+                       value="{{ p.fixed_charges_eur_day.bono_social }}">
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="martini-stripe-thin"></div>
+
+<!-- Injection compensation -->
+<div class="section">
+    <div class="section-header">
+        <span class="icon">&#9728;</span>
+        <h2>Compensaci&oacute; Excedents</h2>
+    </div>
+
+    <div class="settings-card">
+        <div class="settings-row">
+            <div class="settings-field" style="max-width:250px;">
+                <label for="s-injection">Preu compensaci&oacute; (EUR/kWh)</label>
+                <input type="number" id="s-injection" name="injection_price"
+                       step="0.001" min="0"
+                       value="{{ p.injection.price_eur_kwh }}">
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="martini-stripe-thin"></div>
+
+<!-- Indexed tariff components (advanced) -->
+<div class="section">
+    <details class="form-advanced" style="border:none; padding:0;">
+        <summary class="section-header" style="cursor:pointer; margin-bottom:0.5rem;">
+            <span class="icon">&#128202;</span>
+            <h2>Tarifa Indexada (avançat)</h2>
+        </summary>
+        <p class="section-help">Peatges i c&agrave;rrecs regulats (CNMC) + marge comercialitzadora per la tarifa indexada.
+            Nom&eacute;s cal canviar-los si els teus valors s&oacute;n diferents dels regulats.</p>
+
+        <div class="settings-card">
+            <h4 class="settings-subtitle">Peatges d'acc&eacute;s (EUR/kWh)</h4>
+            <div class="settings-row settings-periods">
+                {% for period in ['P1','P2','P3','P4','P5','P6'] %}
+                <div class="settings-field">
+                    <label for="s-peaje-{{ period }}">{{ period }}</label>
+                    <input type="number" id="s-peaje-{{ period }}" name="peaje_{{ period }}"
+                           step="0.000001" min="0"
+                           value="{{ p.indexed_tariff.peajes_eur_kwh[period] }}">
+                </div>
+                {% endfor %}
+            </div>
+
+            <h4 class="settings-subtitle" style="margin-top:1rem;">C&agrave;rrecs (EUR/kWh)</h4>
+            <div class="settings-row settings-periods">
+                {% for period in ['P1','P2','P3','P4','P5','P6'] %}
+                <div class="settings-field">
+                    <label for="s-cargo-{{ period }}">{{ period }}</label>
+                    <input type="number" id="s-cargo-{{ period }}" name="cargo_{{ period }}"
+                           step="0.000001" min="0"
+                           value="{{ p.indexed_tariff.cargos_eur_kwh[period] }}">
+                </div>
+                {% endfor %}
+            </div>
+
+            <div class="settings-row" style="margin-top:1rem;">
+                <div class="settings-field" style="max-width:300px;">
+                    <label for="s-margin">Marge comercialitzadora (EUR/kWh)</label>
+                    <input type="number" id="s-margin" name="indexed_margin"
+                           step="0.0001" min="0"
+                           value="{{ p.indexed_tariff.margin_comercialitzadora_eur_kwh }}">
+                </div>
+            </div>
+        </div>
+    </details>
+</div>
+
+<!-- Save button -->
+<div class="settings-actions">
+    <button type="submit" class="btn btn-primary btn-lg">Desar configuraci&oacute;</button>
+</div>
+
+</form>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('btn-apply-flat-rate').addEventListener('click', function() {
+    var rate = document.getElementById('s-flat-rate').value;
+    if (rate) {
+        ['P1','P2','P3','P4','P5','P6'].forEach(function(p) {
+            document.getElementById('s-rate-' + p).value = rate;
+        });
+    }
+});
+
+// Auto-compute effective rate when discount or base rate changes
+function updateEffective() {
+    var base = parseFloat(document.getElementById('s-base-rate').value) || 0;
+    var disc = parseFloat(document.getElementById('s-discount').value) || 0;
+    var eff = base * (1 - disc / 100);
+    document.getElementById('s-flat-rate').value = eff.toFixed(6);
+}
+document.getElementById('s-base-rate').addEventListener('input', updateEffective);
+document.getElementById('s-discount').addEventListener('input', updateEffective);
+</script>
+{% endblock %}
