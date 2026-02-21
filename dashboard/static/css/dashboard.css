@@ -828,6 +828,23 @@ body {
     font-style: italic;
     color: #E67E22;
 }
+.ref-margin-input {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.75rem;
+    color: #E67E22;
+    font-weight: 600;
+}
+.ref-margin-input input {
+    width: 80px;
+    padding: 0.2rem 0.4rem;
+    border: 1px solid #E67E22;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--text);
+}
 .offer-card-rate {
     font-size: 0.85rem;
     color: var(--text);

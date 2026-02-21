@@ -44,6 +44,25 @@
             };
             refs.push(ref);
         }
+
+        // Configurable reference — user can set any margin
+        refs.push({
+            id: 'ref-idx-custom',
+            supplier: 'Ref. Indexada',
+            name: 'Marge personalitzat',
+            type: 'indexed',
+            is_current: false,
+            _reference: true,
+            _configurable: true,
+            margin_eur_kwh: 0.015,
+            energy_eur_kwh: null,
+            discount_energy_pct: 0,
+            injection_eur_kwh: 0,
+            fixed_charges_eur_day: currentOffer ? (currentOffer.fixed_charges_eur_day || 0) : 0,
+            contracted_power_kw: currentOffer ? clone(currentOffer.contracted_power_kw) : {},
+            power_charges_eur_kw_day: currentOffer ? clone(currentOffer.power_charges_eur_kw_day) : {}
+        });
+
         return refs;
     }
 
@@ -382,7 +401,14 @@
             }
 
             var actionsHtml;
-            if (isRef) {
+            if (isRef && offer._configurable) {
+                actionsHtml = '<div class="ref-margin-input">'
+                    + '<label>Marge (€/kWh):</label> '
+                    + '<input type="number" class="input-ref-margin" '
+                    + 'step="0.001" min="0" max="0.1" '
+                    + 'value="' + (offer.margin_eur_kwh || 0.015) + '">'
+                    + '</div>';
+            } else if (isRef) {
                 actionsHtml = '<span class="ref-note">Generada automàticament</span>';
             } else {
                 actionsHtml = '<button class="btn-link btn-edit-offer" data-id="' + offer.id + '">Editar</button>'
@@ -425,6 +451,21 @@
                 var id = this.dataset.id;
                 if (id.indexOf('ref-idx-') === 0) return;
                 deleteOfferApi(id);
+            });
+        }
+
+        // Bind configurable margin input
+        var marginInput = grid.querySelector('.input-ref-margin');
+        if (marginInput) {
+            marginInput.addEventListener('input', function () {
+                var val = parseFloat(this.value);
+                if (isNaN(val) || val < 0) return;
+                var custom = offers.find(function (o) { return o.id === 'ref-idx-custom'; });
+                if (custom) {
+                    custom.margin_eur_kwh = val;
+                    custom.name = 'Marge ' + val.toFixed(3) + ' €/kWh';
+                    recalculate();
+                }
             });
         }
     }
