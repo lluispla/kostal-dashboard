@@ -71,6 +71,25 @@ function refreshDashboard() {
             updateInverterBadge('inv-piko15-badge', data.inversors.piko_15);
             updateInverterBadge('inv-ci50-badge', data.inversors.piko_ci_50);
 
+            /* Overvoltage badges */
+            updateOvervoltageBadge('ov-badge-piko15', data.inversors.piko_15);
+            updateOvervoltageBadge('ov-badge-ci50', data.inversors.piko_ci_50);
+
+            /* Voltage gauges */
+            if (typeof updateGauges === 'function') {
+                updateGauges(data.inversors);
+            }
+
+            /* Curtailment KPI color */
+            var curtEl = document.querySelector('[data-field="energia.curtailment_kwh"]');
+            if (curtEl) {
+                var parentVal = curtEl.closest('.value');
+                if (parentVal) {
+                    parentVal.classList.remove('val-red', 'val-muted');
+                    parentVal.classList.add(data.energia.curtailment_kwh > 0 ? 'val-red' : 'val-muted');
+                }
+            }
+
             /* Timestamp */
             const ts = document.getElementById('last-update');
             if (ts) ts.textContent = data.last_update;
@@ -83,6 +102,12 @@ function updateInverterBadge(id, inv) {
     if (!el) return;
     el.textContent = inv.text;
     el.className = 'status-badge ' + statusClass(inv.status);
+}
+
+function updateOvervoltageBadge(id, inv) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.style.display = inv.overvoltage ? 'inline-block' : 'none';
 }
 
 function statusClass(code) {

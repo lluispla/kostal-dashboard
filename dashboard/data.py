@@ -289,14 +289,23 @@ def get_energia():
     # Consumption = generation + grid (derived, not from piko_15)
     consumption_w = plant_power_w + grid_flow_w
 
-    # Today's energy for self-consumption rate
+    # Today's energy for self-consumption rate and consumption breakdown
     gen_today = _generation_kwh(today)
     export_today = _export_kwh(today)
+    import_today = _import_kwh(today)
     self_consumption_today = max(gen_today - export_today, 0.0)
+    consumption_today = self_consumption_today + import_today
     if gen_today > 0:
         self_consumption_rate = round((self_consumption_today / gen_today) * 100, 1)
     else:
         self_consumption_rate = 0.0
+    # Consumption origin breakdown (% from PV vs grid)
+    if consumption_today > 0:
+        from_pv_pct = round((self_consumption_today / consumption_today) * 100, 1)
+        from_grid_pct = round((import_today / consumption_today) * 100, 1)
+    else:
+        from_pv_pct = 0.0
+        from_grid_pct = 0.0
 
     # Power curve — generation and grid from DB, consumption computed
     generation = _records_xy(f'''
@@ -317,6 +326,45 @@ def get_energia():
           |> filter(fn: (r) => r._field == "active_power_total")
           |> aggregateWindow(every: 1m, fn: mean, createEmpty: false)
     ''')
+
+    # Voltage curves — Piko CI 50 L1/L2/L3 (overvoltage curtailment tracking)
+    voltage_l1 = _records_xy(f'''
+        from(bucket: "{bucket}")
+          |> range(start: {today})
+          |> filter(fn: (r) => r._measurement == "piko" and r.inverter == "piko_ci_50")
+          |> filter(fn: (r) => r._field == "ac_voltage_l1")
+          |> aggregateWindow(every: 1m, fn: mean, createEmpty: false)
+    ''')
+    voltage_l2 = _records_xy(f'''
+        from(bucket: "{bucket}")
+          |> range(start: {today})
+          |> filter(fn: (r) => r._measurement == "piko" and r.inverter == "piko_ci_50")
+          |> filter(fn: (r) => r._field == "ac_voltage_l2")
+          |> aggregateWindow(every: 1m, fn: mean, createEmpty: false)
+    ''')
+    voltage_l3 = _records_xy(f'''
+        from(bucket: "{bucket}")
+          |> range(start: {today})
+          |> filter(fn: (r) => r._measurement == "piko" and r.inverter == "piko_ci_50")
+          |> filter(fn: (r) => r._field == "ac_voltage_l3")
+          |> aggregateWindow(every: 1m, fn: mean, createEmpty: false)
+    ''')
+
+    # Curtailment estimate — energy lost when voltage >253V causes derating
+    v1 = {p["x"]: p["y"] for p in voltage_l1}
+    v2 = {p["x"]: p["y"] for p in voltage_l2}
+    v3 = {p["x"]: p["y"] for p in voltage_l3}
+    gen_by_t = {p["x"]: p["y"] for p in generation}
+    rated_w = PIKO_15_RATED_W + PIKO_CI_50_RATED_W
+
+    curtailed_wh = 0.0
+    for t in sorted(set(v1) | set(v2) | set(v3)):
+        vmax = max(v1.get(t, 0), v2.get(t, 0), v3.get(t, 0))
+        if vmax > 253.0:
+            actual_w = gen_by_t.get(t, 0)
+            lost_w = max(rated_w - actual_w, 0)
+            curtailed_wh += lost_w / 60  # 1-minute window
+    curtailment_kwh = round(curtailed_wh / 1000, 2)
 
     # Compute consumption curve = generation + grid at each minute
     gen_dict = {p["x"]: p["y"] for p in generation}
@@ -349,12 +397,21 @@ def get_energia():
         "grid_flow_w": round(grid_flow_w, 0),
         "self_consumption_rate": self_consumption_rate,
         "yield_today_kwh": round(gen_today, 1),
+        "consumption_today_kwh": round(consumption_today, 1),
+        "from_pv_kwh": round(self_consumption_today, 1),
+        "from_grid_kwh": round(import_today, 1),
+        "from_pv_pct": from_pv_pct,
+        "from_grid_pct": from_grid_pct,
         "power_curve": {
             "generation": generation,
             "consumption": consumption_curve,
             "grid": grid_curve,
+            "voltage_l1": voltage_l1,
+            "voltage_l2": voltage_l2,
+            "voltage_l3": voltage_l3,
         },
         "daily_yield_30d": daily_yield_30d,
+        "curtailment_kwh": curtailment_kwh,
     }
 
 
@@ -564,11 +621,28 @@ def get_inversors():
         if status_val == 0 and power > 0:
             status_val = 3  # MPP (Producció)
 
+        # AC voltage per phase (from inverter measurement)
+        voltages = {}
+        for phase in ("l1", "l2", "l3"):
+            voltages[phase] = round(_scalar(f'''
+                from(bucket: "{bucket}")
+                  |> range(start: -5m)
+                  |> filter(fn: (r) => r._measurement == "piko" and r.inverter == "{tag}")
+                  |> filter(fn: (r) => r._field == "ac_voltage_{phase}")
+                  |> last()
+            '''), 1)
+
+        overvoltage = any(v > 253.0 for v in voltages.values())
+
         return {
             "status": status_val,
             "text": STATUS_MAP.get(status_val, f"Desconegut ({status_val})"),
             "power_w": round(power, 0),
             "power_pct": pct,
+            "voltage_l1": voltages["l1"],
+            "voltage_l2": voltages["l2"],
+            "voltage_l3": voltages["l3"],
+            "overvoltage": overvoltage,
         }
 
     piko_15 = _inv("piko_15")
@@ -762,7 +836,7 @@ def get_historic_data(time_range="30d"):
     exp_dict = {p["x"]: p["y"] for p in export_kwh}
     all_times = sorted(set(gen_dict) | set(imp_dict) | set(exp_dict))
     consumption = [
-        {"x": t, "y": round(gen_dict.get(t, 0) - exp_dict.get(t, 0) + imp_dict.get(t, 0), 2)}
+        {"x": t, "y": round(max(gen_dict.get(t, 0) - exp_dict.get(t, 0) + imp_dict.get(t, 0), 0), 2)}
         for t in all_times
     ]
 
@@ -801,6 +875,29 @@ def get_historic_data(time_range="30d"):
             for d, vals in sorted(daily.items())
         ]
 
+    # --- Voltage L1/L2/L3 (max per window — useful for overvoltage tracking) ---
+    voltage_l1 = _records_xy(f'''
+        from(bucket: "{bucket}")
+          |> range(start: {flux_range})
+          |> filter(fn: (r) => r._measurement == "piko" and r.inverter == "piko_ci_50")
+          |> filter(fn: (r) => r._field == "ac_voltage_l1")
+          |> aggregateWindow(every: {window}, fn: max, createEmpty: false)
+    ''')
+    voltage_l2 = _records_xy(f'''
+        from(bucket: "{bucket}")
+          |> range(start: {flux_range})
+          |> filter(fn: (r) => r._measurement == "piko" and r.inverter == "piko_ci_50")
+          |> filter(fn: (r) => r._field == "ac_voltage_l2")
+          |> aggregateWindow(every: {window}, fn: max, createEmpty: false)
+    ''')
+    voltage_l3 = _records_xy(f'''
+        from(bucket: "{bucket}")
+          |> range(start: {flux_range})
+          |> filter(fn: (r) => r._measurement == "piko" and r.inverter == "piko_ci_50")
+          |> filter(fn: (r) => r._field == "ac_voltage_l3")
+          |> aggregateWindow(every: {window}, fn: max, createEmpty: false)
+    ''')
+
     # --- Summary ---
     total_gen = sum(p["y"] for p in generation)
     total_imp = sum(p["y"] for p in import_kwh)
@@ -817,6 +914,9 @@ def get_historic_data(time_range="30d"):
         "import_kwh": import_kwh,
         "export_kwh": export_kwh,
         "omie_avg": omie_avg,
+        "voltage_l1": voltage_l1,
+        "voltage_l2": voltage_l2,
+        "voltage_l3": voltage_l3,
         "_fixed_rate": _get_effective_rate(),
         "summary": {
             "total_generation_kwh": round(total_gen, 1),

@@ -35,6 +35,7 @@
     initPowerCurve(initData.energia.power_curve);
     initYield30d(initData.energia.daily_yield_30d);
     initOmieHourly(initData.mercat);
+    initGauges(initData.inversors);
 
     // Escape key exits fullscreen on dashboard
     document.addEventListener('keydown', function (e) {
@@ -43,7 +44,7 @@
                 el.classList.remove('dash-fullscreen');
             });
             setTimeout(function () {
-                [chartGen, chartCons, chartGrid, chartYield, chartOmie].forEach(function (c) {
+                [chartGen, chartCons, chartGrid, chartVoltage, chartYield, chartOmie].forEach(function (c) {
                     if (c) c.resize();
                 });
             }, 50);

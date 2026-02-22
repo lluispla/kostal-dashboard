@@ -21,6 +21,7 @@
     let chartGenCons = null;
     let chartImpExp = null;
     let chartOmie = null;
+    let chartVoltage = null;
     let currentRange = '7d';
     let showEma = false;
     let lastData = null;
@@ -197,6 +198,69 @@
         });
     }
 
+    // -- Chart 4: Tensió xarxa (L1/L2/L3 + 253V threshold) -------------------
+    function initChartVoltage(data) {
+        const ctx = document.getElementById('chart-voltage-hist');
+        if (!ctx) return;
+        if (chartVoltage) chartVoltage.destroy();
+
+        var l1 = data.voltage_l1 || [];
+        var l2 = data.voltage_l2 || [];
+        var l3 = data.voltage_l3 || [];
+        var allData = [].concat(l1, l2, l3);
+        var thresholdLine = allData.length
+            ? [{ x: allData[0].x, y: 253 }, { x: allData[allData.length - 1].x, y: 253 }]
+            : [];
+
+        chartVoltage = new Chart(ctx.getContext('2d'), {
+            type: 'line',
+            data: {
+                datasets: [
+                    {
+                        label: 'L1',
+                        data: l1,
+                        borderColor: '#e67e22',
+                        fill: false, tension: 0.3, pointRadius: 0, borderWidth: 2,
+                    },
+                    {
+                        label: 'L2',
+                        data: l2,
+                        borderColor: '#28a745',
+                        fill: false, tension: 0.3, pointRadius: 0, borderWidth: 2,
+                    },
+                    {
+                        label: 'L3',
+                        data: l3,
+                        borderColor: '#0C4DA2',
+                        fill: false, tension: 0.3, pointRadius: 0, borderWidth: 2,
+                    },
+                    {
+                        label: 'Límit 253 V',
+                        data: thresholdLine,
+                        borderColor: '#E63946',
+                        borderDash: [6, 4],
+                        borderWidth: 1.5,
+                        pointRadius: 0,
+                        fill: false,
+                    },
+                ],
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                scales: {
+                    x: { type: 'time', time: { unit: timeUnit(data.granularity), tooltipFormat: data.granularity === '1h' ? 'dd/MM HH:mm' : 'dd/MM/yyyy', displayFormats: { hour: 'HH:mm', day: 'dd/MM' } }, grid: { display: false } },
+                    y: { position: 'right', suggestedMin: 220, suggestedMax: 260, ticks: { callback: function (v) { return v + ' V'; } }, grid: { color: '#f0f0f0' } },
+                },
+                plugins: {
+                    zoom: zoomOptions,
+                    legend: { position: 'top', labels: { usePointStyle: true, boxWidth: 8 } },
+                    tooltip: { callbacks: { label: function (ctx) { return ctx.dataset.label + ': ' + ctx.parsed.y.toFixed(1) + ' V'; } } },
+                },
+            },
+        });
+    }
+
     // -- Rebuild charts (called on EMA toggle) --------------------------------
     function rebuildCharts() {
         if (!lastData) return;
@@ -222,6 +286,7 @@
             initChartGenCons(data);
             initChartImpExp(data);
             initChartOmie(data);
+            initChartVoltage(data);
         } catch (e) {
             loading.textContent = 'Error carregant dades.';
         }
@@ -231,6 +296,7 @@
     document.getElementById('reset-zoom-1').addEventListener('click', function () { if (chartGenCons) chartGenCons.resetZoom(); });
     document.getElementById('reset-zoom-2').addEventListener('click', function () { if (chartImpExp) chartImpExp.resetZoom(); });
     document.getElementById('reset-zoom-3').addEventListener('click', function () { if (chartOmie) chartOmie.resetZoom(); });
+    document.getElementById('reset-zoom-4').addEventListener('click', function () { if (chartVoltage) chartVoltage.resetZoom(); });
 
     // -- Range button clicks --------------------------------------------------
     document.querySelectorAll('.range-btn').forEach(function (btn) {
@@ -252,6 +318,7 @@
         if (chartGenCons) chartGenCons.resize();
         if (chartImpExp) chartImpExp.resize();
         if (chartOmie) chartOmie.resize();
+        if (chartVoltage) chartVoltage.resize();
     }
 
     document.querySelectorAll('.fullscreen-btn').forEach(function (btn) {

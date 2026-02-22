@@ -5,8 +5,8 @@
         <h2>Energia</h2>
     </div>
 
-    <div class="kpi-grid">
-        <!-- Generació planta ara -->
+    <!-- Row 1 — Potència en temps real -->
+    <div class="kpi-row">
         <div class="kpi-card">
             <div class="label">Generació planta ara</div>
             <div class="description">Potència AC total dels dos inversors (PIKO 15 + CI 50)</div>
@@ -15,8 +15,6 @@
                 <span class="unit">W</span>
             </div>
         </div>
-
-        <!-- Consum negoci ara -->
         <div class="kpi-card">
             <div class="label">Consum negoci ara</div>
             <div class="description">Potència consumida al local (autoconsum + xarxa)</div>
@@ -25,8 +23,6 @@
                 <span class="unit">W</span>
             </div>
         </div>
-
-        <!-- Flux xarxa ara -->
         <div class="kpi-card">
             <div class="label">Flux xarxa ara</div>
             <div class="description">Positiu = important de xarxa, negatiu = exportant excedent</div>
@@ -35,14 +31,54 @@
                 <span class="unit">W</span>
             </div>
         </div>
-
-        <!-- Taxa autoconsum -->
         <div class="kpi-card">
             <div class="label">Taxa autoconsum avui</div>
             <div class="description">Percentatge d'energia solar consumida localment</div>
             <div class="value val-blue">
                 <span data-field="energia.self_consumption_rate" data-fmt="1">{{ "%.1f"|format(d.energia.self_consumption_rate) }}</span>
                 <span class="unit">%</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Row 2 — Energia avui (consum breakdown) -->
+    <div class="kpi-row">
+        <div class="kpi-card">
+            <div class="label">Consum total avui</div>
+            <div class="description">Energia total consumida (solar + xarxa)</div>
+            <div class="value val-navy">
+                <span data-field="energia.consumption_today_kwh" data-fmt="1">{{ "%.1f"|format(d.energia.consumption_today_kwh) }}</span>
+                <span class="unit">kWh</span>
+            </div>
+        </div>
+        <div class="kpi-card">
+            <div class="label">Des de solar</div>
+            <div class="description">Autoconsum directe de la planta fotovoltaica</div>
+            <div class="value val-green">
+                <span data-field="energia.from_pv_kwh" data-fmt="1">{{ "%.1f"|format(d.energia.from_pv_kwh) }}</span>
+                <span class="unit">kWh</span>
+            </div>
+            <div class="kpi-pct val-green">
+                <span data-field="energia.from_pv_pct" data-fmt="1">{{ "%.1f"|format(d.energia.from_pv_pct) }}</span>% del consum
+            </div>
+        </div>
+        <div class="kpi-card">
+            <div class="label">Des de xarxa</div>
+            <div class="description">Energia importada de la xarxa el&egrave;ctrica</div>
+            <div class="value val-red">
+                <span data-field="energia.from_grid_kwh" data-fmt="1">{{ "%.1f"|format(d.energia.from_grid_kwh) }}</span>
+                <span class="unit">kWh</span>
+            </div>
+            <div class="kpi-pct val-red">
+                <span data-field="energia.from_grid_pct" data-fmt="1">{{ "%.1f"|format(d.energia.from_grid_pct) }}</span>% del consum
+            </div>
+        </div>
+        <div class="kpi-card">
+            <div class="label">Pèrdua per sobretensió avui</div>
+            <div class="description">Estimació d'energia perduda quan tensió &gt;253V (límit superior)</div>
+            <div class="value {% if d.energia.curtailment_kwh > 0 %}val-red{% else %}val-muted{% endif %}">
+                <span data-field="energia.curtailment_kwh" data-fmt="2">{{ "%.2f"|format(d.energia.curtailment_kwh) }}</span>
+                <span class="unit">kWh</span>
             </div>
         </div>
     </div>
@@ -72,6 +108,13 @@
         <button class="chart-btn fullscreen-btn" onclick="toggleDashFullscreen('dash-wrap-grid')">&#x26F6;</button>
         <div style="height: 180px;">
             <canvas id="chart-grid"></canvas>
+        </div>
+    </div>
+    <div class="chart-wrap dash-chart-wrap" id="dash-wrap-voltage">
+        <h3>Tensió xarxa (Piko CI 50) — avui</h3>
+        <button class="chart-btn fullscreen-btn" onclick="toggleDashFullscreen('dash-wrap-voltage')">&#x26F6;</button>
+        <div style="height: 180px;">
+            <canvas id="chart-voltage"></canvas>
         </div>
     </div>
 

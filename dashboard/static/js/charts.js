@@ -14,11 +14,12 @@ const COLORS = {
     redFill:  'rgba(230,57,70,0.10)',
 };
 
-let chartGen    = null;
-let chartCons   = null;
-let chartGrid   = null;
-let chartYield  = null;
-let chartOmie   = null;
+let chartGen     = null;
+let chartCons    = null;
+let chartGrid    = null;
+let chartVoltage = null;
+let chartYield   = null;
+let chartOmie    = null;
 
 // -- EMA helpers ----------------------------------------------------------
 let dashShowEma = false;
@@ -180,12 +181,85 @@ function _initGrid(data) {
     });
 }
 
+/* -- 1d. Voltage (3-phase lines + 253V threshold) ------------------------- */
+function _initVoltage(l1, l2, l3) {
+    const ctx = document.getElementById('chart-voltage');
+    if (!ctx) return;
+    // Use longest series for threshold endpoints
+    var allData = [].concat(l1 || [], l2 || [], l3 || []);
+    var thresholdLine = allData.length
+        ? [{ x: allData[0].x, y: 253 }, { x: allData[allData.length - 1].x, y: 253 }]
+        : [];
+    var datasets = [
+        {
+            label: 'L1',
+            data: l1 || [],
+            borderColor: '#e67e22',
+            backgroundColor: 'rgba(230,126,34,0.10)',
+            fill: false,
+            tension: 0.3,
+            pointRadius: 0,
+            borderWidth: 2,
+        },
+        {
+            label: 'L2',
+            data: l2 || [],
+            borderColor: COLORS.green,
+            fill: false,
+            tension: 0.3,
+            pointRadius: 0,
+            borderWidth: 2,
+        },
+        {
+            label: 'L3',
+            data: l3 || [],
+            borderColor: COLORS.blue,
+            fill: false,
+            tension: 0.3,
+            pointRadius: 0,
+            borderWidth: 2,
+        },
+        {
+            label: 'Límit 253 V',
+            data: thresholdLine,
+            borderColor: COLORS.red,
+            borderWidth: 1.5,
+            borderDash: [6, 4],
+            pointRadius: 0,
+            fill: false,
+        },
+    ];
+    chartVoltage = new Chart(ctx, {
+        type: 'line',
+        data: { datasets: datasets },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: true, position: 'top', labels: { usePointStyle: true, boxWidth: 8 } },
+                tooltip: { callbacks: { label: c => c.dataset.label + ': ' + c.parsed.y.toFixed(1) + ' V' } },
+            },
+            scales: {
+                x: _powerXAxis(),
+                y: {
+                    position: 'right',
+                    suggestedMin: 220,
+                    suggestedMax: 260,
+                    ticks: { color: '#6c757d', callback: v => v + ' V' },
+                    grid: { color: '#f0f0f0' },
+                },
+            },
+        },
+    });
+}
+
 /* -- Public interface ----------------------------------------------------- */
 function initPowerCurve(data) {
     lastPowerData = data;
     _initGen(data.generation);
     _initCons(data.consumption);
     _initGrid(data.grid);
+    _initVoltage(data.voltage_l1 || [], data.voltage_l2 || [], data.voltage_l3 || []);
 }
 
 function updatePowerCurve(data) {
@@ -193,9 +267,11 @@ function updatePowerCurve(data) {
     if (chartGen) chartGen.destroy();
     if (chartCons) chartCons.destroy();
     if (chartGrid) chartGrid.destroy();
+    if (chartVoltage) chartVoltage.destroy();
     _initGen(data.generation);
     _initCons(data.consumption);
     _initGrid(data.grid);
+    _initVoltage(data.voltage_l1 || [], data.voltage_l2 || [], data.voltage_l3 || []);
 }
 
 /* -- 2. Daily Yield 30d (bar) -------------------------------------------- */
@@ -334,6 +410,110 @@ function toggleDashEma() {
     if (lastPowerData) updatePowerCurve(lastPowerData);
 }
 
+/* -- Voltage gauges (half-circle doughnut per phase) ---------------------- */
+var gaugeCharts = {};
+var gaugeHWM = { l1: 0, l2: 0, l3: 0 };
+
+function _gaugeColor(v) {
+    if (v > 253) return '#E63946';
+    if (v > 250) return '#e67e22';
+    if (v > 245) return '#f0ad4e';
+    return '#28a745';
+}
+
+// Chart.js plugin to draw HWM tick on gauge arc
+var gaugeCenterPlugin = {
+    id: 'gaugeCenter',
+    afterDraw: function (chart) {
+        var meta = chart.getDatasetMeta(0);
+        if (!meta || !meta.data || !meta.data[0]) return;
+        var hwm = chart.config._gaugeHWM;
+        if (!hwm || hwm <= 0) return;
+
+        var ctx = chart.ctx;
+        var arc = meta.data[0];
+        var cx = arc.x;
+        var cy = arc.y;
+        var minV = 210, maxV = 260, range = maxV - minV;
+        var pct = Math.min(Math.max((hwm - minV) / range, 0), 1);
+        var angle = -Math.PI + pct * Math.PI;
+        var r = arc.outerRadius;
+        var ri = arc.innerRadius;
+        var mx = cx + Math.cos(angle) * (ri + (r - ri) * 0.5);
+        var my = cy + Math.sin(angle) * (ri + (r - ri) * 0.5);
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(mx, my, 3, 0, 2 * Math.PI);
+        ctx.fillStyle = '#E63946';
+        ctx.fill();
+        ctx.restore();
+    }
+};
+
+function initGauges(inversors) {
+    var phases = ['l1', 'l2', 'l3'];
+    phases.forEach(function (ph) {
+        var canvas = document.getElementById('gauge-' + ph);
+        if (!canvas) return;
+        var v = inversors.piko_ci_50['voltage_' + ph] || 0;
+        gaugeHWM[ph] = v;
+        _createGauge(canvas, ph, v);
+        _updateGaugeText(ph, v);
+    });
+}
+
+function _createGauge(canvas, phase, voltage) {
+    if (gaugeCharts[phase]) gaugeCharts[phase].destroy();
+    var minV = 210, maxV = 260, range = maxV - minV;
+    var pct = Math.min(Math.max((voltage - minV) / range, 0), 1);
+    var filled = pct * 100;
+    var empty = 100 - filled;
+    var chart = new Chart(canvas, {
+        type: 'doughnut',
+        data: {
+            datasets: [{
+                data: [filled, empty],
+                backgroundColor: [_gaugeColor(voltage), '#e9ecef'],
+                borderWidth: 0,
+            }]
+        },
+        options: {
+            circumference: 180,
+            rotation: -90,
+            cutout: '70%',
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false }, tooltip: { enabled: false } },
+        },
+        plugins: [gaugeCenterPlugin],
+    });
+    chart.config._gaugeValue = voltage;
+    chart.config._gaugeHWM = gaugeHWM[phase];
+    gaugeCharts[phase] = chart;
+}
+
+function updateGauges(inversors) {
+    var phases = ['l1', 'l2', 'l3'];
+    phases.forEach(function (ph) {
+        var canvas = document.getElementById('gauge-' + ph);
+        if (!canvas) return;
+        var v = inversors.piko_ci_50['voltage_' + ph] || 0;
+        if (v > gaugeHWM[ph]) gaugeHWM[ph] = v;
+        _createGauge(canvas, ph, v);
+        _updateGaugeText(ph, v);
+    });
+}
+
+function _updateGaugeText(phase, voltage) {
+    var valEl = document.getElementById('gauge-val-' + phase);
+    var hwmEl = document.getElementById('gauge-hwm-' + phase);
+    if (valEl) {
+        valEl.textContent = voltage.toFixed(1) + ' V';
+        valEl.style.color = _gaugeColor(voltage);
+    }
+    if (hwmEl) hwmEl.textContent = 'Màx: ' + gaugeHWM[phase].toFixed(1) + ' V';
+}
+
 /* -- Fullscreen toggle (called from dashboard page) ---------------------- */
 function toggleDashFullscreen(wrapId) {
     var wrap = document.getElementById(wrapId);
@@ -341,7 +521,7 @@ function toggleDashFullscreen(wrapId) {
     wrap.classList.toggle('dash-fullscreen');
     // Resize all charts after layout change
     setTimeout(function () {
-        [chartGen, chartCons, chartGrid, chartYield, chartOmie].forEach(function (c) {
+        [chartGen, chartCons, chartGrid, chartVoltage, chartYield, chartOmie].forEach(function (c) {
             if (c) c.resize();
         });
     }, 50);
