@@ -53,7 +53,7 @@
     <div class="kpi-grid">
         <div class="kpi-card">
             <div class="label">Factura anual (fixa)</div>
-            <div class="description">Projecci&oacute; mensual &times; 12</div>
+            <div class="description">{% if d.previsio.projection_method == 'seasonal' %}Model estacional (12 mesos){% else %}Projecci&oacute; mensual &times; 12{% endif %}</div>
             <div class="value val-navy">
                 <span data-field="previsio.anual_fix_net" data-fmt="2">{{ "%.2f"|format(d.previsio.anual_fix_net) }}</span>
                 <span class="unit">&euro;</span>
@@ -62,7 +62,7 @@
 
         <div class="kpi-card">
             <div class="label">Factura anual (indexada)</div>
-            <div class="description">Projecci&oacute; mensual &times; 12</div>
+            <div class="description">{% if d.previsio.projection_method == 'seasonal' %}Model estacional (12 mesos){% else %}Projecci&oacute; mensual &times; 12{% endif %}</div>
             <div class="value val-navy">
                 <span data-field="previsio.anual_indexat_net" data-fmt="2">{{ "%.2f"|format(d.previsio.anual_indexat_net) }}</span>
                 <span class="unit">&euro;</span>
@@ -80,6 +80,12 @@
     </div>
 
     <p style="font-size: 0.7rem; color: var(--muted); margin: 0;">
-        Projecci&oacute; basada en <span data-field="previsio.days_elapsed" data-fmt="1">{{ "%.1f"|format(d.previsio.days_elapsed) }}</span> dies de dades. Extrapolaci&oacute; lineal.
+        {% if d.previsio.projection_method == 'seasonal' %}
+        Mensual: dades reals ({{ "%.1f"|format(d.previsio.days_elapsed) }}d) + model estacional per als dies restants.
+        Anual: projecci&oacute; de 12 mesos amb factors solars estacionals (PVGIS 41&deg;N), calibrats amb {{ d.previsio.hist_days }} dies hist&ograve;rics.
+        Millora autom&agrave;ticament a mesura que s'acumulen dades.
+        {% else %}
+        Projecci&oacute; basada en <span data-field="previsio.days_elapsed" data-fmt="1">{{ "%.1f"|format(d.previsio.days_elapsed) }}</span> dies de dades. Extrapolaci&oacute; lineal (dades insuficients per al model estacional).
+        {% endif %}
     </p>
 </div>

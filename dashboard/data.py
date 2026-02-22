@@ -693,28 +693,219 @@ def get_inversors():
     }
 
 
+
+# -- Seasonal energy model for projections ----------------------------------
+
+# Solar irradiance factors for Catalonia (~41°N latitude).
+# Each value is the relative monthly production vs the annual average (1.0).
+# Source: PVGIS / typical Mediterranean climate data.
+_SOLAR_MONTH_FACTOR = {
+    1: 0.55, 2: 0.70, 3: 0.95, 4: 1.10, 5: 1.25, 6: 1.35,
+    7: 1.40, 8: 1.30, 9: 1.10, 10: 0.85, 11: 0.60, 12: 0.50,
+}
+
+
+def _historical_daily_profile():
+    """Compute average daily energy profile from ALL available data.
+
+    Returns dict with avg daily generation/import/export/consumption in kWh,
+    the number of data days, and the weighted seasonal factor of the data
+    period (so we can de-seasonalise the averages).
+
+    Returns None if fewer than 2 days of data are available.
+    """
+    bucket = INFLUXDB_BUCKET
+
+    # Daily generation (both inverters summed)
+    gen_daily = _records_xy(f'''
+        from(bucket: "{bucket}")
+          |> range(start: 0)
+          |> filter(fn: (r) => r._measurement == "piko")
+          |> filter(fn: (r) => exists r.inverter)
+          |> filter(fn: (r) => r._field == "ac_power_total")
+          |> aggregateWindow(every: 1d, fn: mean, createEmpty: false)
+          |> map(fn: (r) => ({{r with _value: r._value * 24.0 / 1000.0}}))
+          |> group(columns: ["_time"])
+          |> sum()
+          |> group()
+          |> filter(fn: (r) => r._value > 0.1)
+    ''')
+
+    # Daily import / export (hourly spread → daily sum, filtered for sanity)
+    imp_daily = _records_xy(f'''
+        from(bucket: "{bucket}")
+          |> range(start: 0)
+          |> filter(fn: (r) => r._measurement == "ksem")
+          |> filter(fn: (r) => r._field == "energy_import_total")
+          |> aggregateWindow(every: 1h, fn: spread, createEmpty: false)
+          |> filter(fn: (r) => r._value >= 0 and r._value < 200)
+          |> aggregateWindow(every: 1d, fn: sum, createEmpty: false)
+    ''')
+    exp_daily = _records_xy(f'''
+        from(bucket: "{bucket}")
+          |> range(start: 0)
+          |> filter(fn: (r) => r._measurement == "ksem")
+          |> filter(fn: (r) => r._field == "energy_export_total")
+          |> aggregateWindow(every: 1h, fn: spread, createEmpty: false)
+          |> filter(fn: (r) => r._value >= 0 and r._value < 200)
+          |> aggregateWindow(every: 1d, fn: sum, createEmpty: false)
+    ''')
+
+    if not gen_daily or len(gen_daily) < 2:
+        return None
+
+    num_days = len(gen_daily)
+    avg_gen = sum(p["y"] for p in gen_daily) / num_days
+    avg_imp = sum(p["y"] for p in imp_daily) / max(len(imp_daily), 1)
+    avg_exp = sum(p["y"] for p in exp_daily) / max(len(exp_daily), 1)
+    avg_cons = avg_gen - avg_exp + avg_imp
+
+    # Weighted seasonal factor of the data period — tells us how
+    # representative our sample is relative to a full year.
+    month_counts = {}
+    for p in gen_daily:
+        # p["x"] is an ISO string; extract month
+        m = int(p["x"][5:7])
+        month_counts[m] = month_counts.get(m, 0) + 1
+    avg_seasonal = sum(
+        _SOLAR_MONTH_FACTOR[m] * c for m, c in month_counts.items()
+    ) / num_days
+
+    return {
+        "avg_gen": avg_gen,
+        "avg_import": avg_imp,
+        "avg_export": avg_exp,
+        "avg_consumption": max(avg_cons, 0),
+        "num_days": num_days,
+        "avg_seasonal_factor": avg_seasonal,
+    }
+
+
+def _project_month(month, year, profile, pricing, avg_indexed_rate):
+    """Project energy balance and bill for a single calendar month.
+
+    Uses the historical daily profile adjusted by the seasonal solar factor
+    for the target month.  Returns (net_fix, net_idx).
+    """
+    days = calendar.monthrange(year, month)[1]
+    factor = _SOLAR_MONTH_FACTOR[month]
+    avg_sf = profile["avg_seasonal_factor"]
+
+    # Scale generation by seasonal factor; consumption is ~stable
+    daily_gen = profile["avg_gen"] * factor / avg_sf
+    daily_cons = profile["avg_consumption"]
+    daily_self = min(daily_gen, daily_cons)
+    daily_export = max(daily_gen - daily_self, 0)
+    daily_import = max(daily_cons - daily_self, 0)
+
+    month_import = daily_import * days
+    month_export = daily_export * days
+
+    # Energy costs — fixed uses contracted rate, indexed uses observed avg
+    fixed_rate = pricing["energy"]["effective_rate_eur_kwh"]
+    injection_price = pricing["injection"]["price_eur_kwh"]
+
+    energy_fix = month_import * fixed_rate
+    energy_idx = month_import * avg_indexed_rate
+    compensacio = month_export * injection_price
+
+    # Power charges
+    power_cost = 0.0
+    for period, rate in pricing["power_charges_eur_kw_day"].items():
+        kw = pricing["contracted_power_kw"].get(period, 69)
+        power_cost += rate * kw * days
+
+    # Fixed charges
+    fixed_daily = sum(pricing["fixed_charges_eur_day"].values())
+    fixed_charges = fixed_daily * days
+
+    # Taxes
+    elec_tax = pricing["taxes"]["electricity_tax_pct"] / 100
+    iva = pricing["taxes"]["iva_pct"] / 100
+
+    def _bill(energy_cost):
+        base = energy_cost + power_cost
+        imp = base * elec_tax
+        sub = base + imp + fixed_charges
+        vat = sub * iva
+        return round(sub + vat - compensacio, 2)
+
+    return _bill(energy_fix), _bill(energy_idx)
+
+
 def get_previsio_factura(mercat_data):
     """Project full electricity bill (monthly + annual) for treasury management.
 
-    Reuses energy costs from mercat_data to avoid duplicate InfluxDB queries.
-    Adds power charges, taxes, fixed charges, and injection compensation.
+    Monthly projection: actual data for elapsed days + seasonal model for
+    remaining days (or linear extrapolation as fallback).
+
+    Annual projection: sum of 12 individually projected months using a
+    seasonal solar model calibrated from ALL historical data, instead of
+    the naive ``current_month × 12``.
     """
     pricing = _load_pricing()
     now = _cet_now()
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     days_in_month = calendar.monthrange(now.year, now.month)[1]
     days_elapsed = (now - month_start).days + now.hour / 24.0
+    remaining_days = days_in_month - days_elapsed
     ratio = days_in_month / max(days_elapsed, 0.5)
 
-    # Reuse cumulative energy costs from mercat
-    energy_fix = mercat_data["cost_fixed_month"] * ratio
-    energy_idx = mercat_data["cost_indexed_month"] * ratio
+    # Actual energy data for the current month so far (from mercat)
+    actual_cost_fix = mercat_data["cost_fixed_month"]
+    actual_cost_idx = mercat_data["cost_indexed_month"]
+    actual_export = _export_kwh(_month_start_iso())
+    actual_import = _import_kwh(_month_start_iso())
 
-    # Export projection for injection compensation
-    export_month = _export_kwh(_month_start_iso())
-    export_projected = export_month * ratio
     injection_price = pricing["injection"]["price_eur_kwh"]
-    compensacio = round(export_projected * injection_price, 2)
+
+    # --- Historical profile for seasonal model ---
+    profile = _historical_daily_profile()
+
+    if profile:
+        # --- MONTHLY: actual elapsed + seasonal estimate for remaining days ---
+        factor = _SOLAR_MONTH_FACTOR[now.month]
+        avg_sf = profile["avg_seasonal_factor"]
+        daily_gen = profile["avg_gen"] * factor / avg_sf
+        daily_cons = profile["avg_consumption"]
+        daily_self = min(daily_gen, daily_cons)
+        daily_export = max(daily_gen - daily_self, 0)
+        daily_import = max(daily_cons - daily_self, 0)
+
+        fixed_rate = _get_effective_rate()
+
+        # Average observed indexed rate from this month's real OMIE data.
+        # This is the best proxy for future indexed costs.
+        if actual_import > 0:
+            avg_idx_rate = actual_cost_idx / actual_import
+        else:
+            avg_idx_rate = mercat_data.get("current_indexed_real", fixed_rate)
+
+        energy_fix = actual_cost_fix + daily_import * remaining_days * fixed_rate
+        energy_idx = actual_cost_idx + daily_import * remaining_days * avg_idx_rate
+        export_projected = actual_export + daily_export * remaining_days
+        compensacio = round(export_projected * injection_price, 2)
+
+        # --- ANNUAL: sum of 12 individually projected months ---
+        anual_fix = 0.0
+        anual_idx = 0.0
+        for m in range(1, 13):
+            mf, mi = _project_month(m, now.year, profile, pricing, avg_idx_rate)
+            anual_fix += mf
+            anual_idx += mi
+
+        projection_method = "seasonal"
+        hist_days = profile["num_days"]
+    else:
+        # Fallback: linear extrapolation (insufficient historical data)
+        energy_fix = actual_cost_fix * ratio
+        energy_idx = actual_cost_idx * ratio
+        export_projected = actual_export * ratio
+        compensacio = round(export_projected * injection_price, 2)
+        anual_fix = None  # computed below from monthly
+        anual_idx = None
+        projection_method = "lineal"
+        hist_days = 0
 
     # Power charges — deterministic (same for both tariffs)
     power_cost = 0.0
@@ -731,13 +922,13 @@ def get_previsio_factura(mercat_data):
     elec_tax_pct = pricing["taxes"]["electricity_tax_pct"] / 100
     iva_pct = pricing["taxes"]["iva_pct"] / 100
 
-    def _compute_bill(energy):
+    def _compute_bill(energy, comp):
         base = energy + power_cost
         impost = round(base * elec_tax_pct, 2)
         subtotal = base + impost + fixed_charges
         iva = round(subtotal * iva_pct, 2)
         total = round(subtotal + iva, 2)
-        net = round(total - compensacio, 2)
+        net = round(total - comp, 2)
         return {
             "energia": round(energy, 2),
             "potencia": power_cost,
@@ -745,15 +936,20 @@ def get_previsio_factura(mercat_data):
             "carregues_fixes": fixed_charges,
             "iva": iva,
             "total": total,
-            "compensacio": compensacio,
+            "compensacio": comp,
             "net": net,
         }
 
-    mensual_fix = _compute_bill(energy_fix)
-    mensual_idx = _compute_bill(energy_idx)
+    mensual_fix = _compute_bill(energy_fix, compensacio)
+    mensual_idx = _compute_bill(energy_idx, compensacio)
 
-    anual_fix_net = round(mensual_fix["net"] * 12, 2)
-    anual_idx_net = round(mensual_idx["net"] * 12, 2)
+    # Annual: use seasonal model if available, otherwise monthly × 12
+    if anual_fix is not None:
+        anual_fix_net = round(anual_fix, 2)
+        anual_idx_net = round(anual_idx, 2)
+    else:
+        anual_fix_net = round(mensual_fix["net"] * 12, 2)
+        anual_idx_net = round(mensual_idx["net"] * 12, 2)
 
     return {
         "days_elapsed": round(days_elapsed, 1),
@@ -764,6 +960,8 @@ def get_previsio_factura(mercat_data):
         "anual_fix_net": anual_fix_net,
         "anual_indexat_net": anual_idx_net,
         "estalvi_anual_indexat": round(anual_fix_net - anual_idx_net, 2),
+        "projection_method": projection_method,
+        "hist_days": hist_days,
     }
 
 
