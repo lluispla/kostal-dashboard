@@ -133,23 +133,48 @@
         if (chartImpExp) chartImpExp.destroy();
         var ep = emaPeriod(data.granularity);
 
+        // Merge timestamps from both series into a sorted label array
+        var timeSet = {};
+        (data.import_kwh || []).forEach(function (d) { timeSet[d.x] = true; });
+        (data.export_kwh || []).forEach(function (d) { timeSet[d.x] = true; });
+        var timestamps = Object.keys(timeSet).sort();
+        // Build lookup dicts for fast access
+        var impMap = {};
+        (data.import_kwh || []).forEach(function (d) { impMap[d.x] = d.y; });
+        var expMap = {};
+        (data.export_kwh || []).forEach(function (d) { expMap[d.x] = d.y; });
+        var impValues = timestamps.map(function (t) { return impMap[t] || 0; });
+        var expValues = timestamps.map(function (t) { return expMap[t] || 0; });
+        // Format labels for category axis
+        var isHourly = data.granularity === '1h';
+        var labels = timestamps.map(function (t) {
+            var d = new Date(t);
+            var dd = String(d.getDate()).padStart(2, '0');
+            var mm = String(d.getMonth() + 1).padStart(2, '0');
+            if (isHourly) return dd + '/' + mm + ' ' + String(d.getHours()).padStart(2, '0') + ':00';
+            return dd + '/' + mm;
+        });
+
         var datasets = [
-            { label: 'Importació', data: data.import_kwh, backgroundColor: 'rgba(230, 57, 70, 0.7)', borderColor: '#E63946', borderWidth: 1 },
-            { label: 'Exportació', data: data.export_kwh, backgroundColor: 'rgba(40, 167, 69, 0.7)', borderColor: '#28a745', borderWidth: 1 },
+            { label: 'Importació', data: impValues, backgroundColor: 'rgba(230, 57, 70, 0.7)', borderColor: '#E63946', borderWidth: 1 },
+            { label: 'Exportació', data: expValues, backgroundColor: 'rgba(40, 167, 69, 0.7)', borderColor: '#28a745', borderWidth: 1 },
         ];
         if (showEma) {
-            datasets.push(Object.assign(emaDataset('EMA Importació', data.import_kwh, '#E63946', ep), { type: 'line' }));
-            datasets.push(Object.assign(emaDataset('EMA Exportació', data.export_kwh, '#28a745', ep), { type: 'line' }));
+            // EMA datasets use indexed data for category axis
+            var impXY = timestamps.map(function (t, i) { return { x: i, y: impMap[t] || 0 }; });
+            var expXY = timestamps.map(function (t, i) { return { x: i, y: expMap[t] || 0 }; });
+            datasets.push(Object.assign(emaDataset('EMA Importació', impXY, '#E63946', ep), { type: 'line' }));
+            datasets.push(Object.assign(emaDataset('EMA Exportació', expXY, '#28a745', ep), { type: 'line' }));
         }
 
         chartImpExp = new Chart(ctx, {
             type: 'bar',
-            data: { datasets: datasets },
+            data: { labels: labels, datasets: datasets },
             options: {
                 responsive: true, maintainAspectRatio: false,
                 interaction: { mode: 'index', intersect: false },
                 scales: {
-                    x: { type: 'time', time: { unit: timeUnit(data.granularity), tooltipFormat: data.granularity === '1h' ? 'dd/MM HH:mm' : 'dd/MM/yyyy', displayFormats: { hour: 'HH:mm', day: 'dd/MM' } }, grid: { display: false }, offset: true },
+                    x: { type: 'category', grid: { display: false }, ticks: { maxRotation: 45, autoSkip: true, maxTicksLimit: 20 } },
                     y: { position: 'right', ticks: { callback: function (v) { return v + ' kWh'; } }, grid: { color: '#f0f0f0' } },
                 },
                 plugins: {
