@@ -7,20 +7,201 @@
       "type": "fixed",
       "is_current": true,
       "energy_eur_kwh": {
-        "P1": 0.153962, "P2": 0.153962, "P3": 0.153962,
-        "P4": 0.153962, "P5": 0.153962, "P6": 0.153962
+        "P1": 0.153962,
+        "P2": 0.153962,
+        "P3": 0.153962,
+        "P4": 0.153962,
+        "P5": 0.153962,
+        "P6": 0.153962
       },
       "margin_eur_kwh": null,
       "power_charges_eur_kw_day": {
-        "P1": 0.060903, "P2": 0.036886, "P3": 0.017573,
-        "P4": 0.017573, "P5": 0.017573, "P6": 0.006065
+        "P1": 0.060903,
+        "P2": 0.036886,
+        "P3": 0.017573,
+        "P4": 0.017573,
+        "P5": 0.017573,
+        "P6": 0.006065
       },
       "contracted_power_kw": {
-        "P1": 69, "P2": 69, "P3": 69, "P4": 69, "P5": 69, "P6": 69
+        "P1": 69,
+        "P2": 69,
+        "P3": 69,
+        "P4": 69,
+        "P5": 69,
+        "P6": 69
       },
       "injection_eur_kwh": 0.05,
       "fixed_charges_eur_day": 1.659,
       "discount_energy_pct": 0
+    },
+    {
+      "supplier": "Repsol",
+      "name": "Oferta fixa 2026",
+      "type": "fixed",
+      "is_current": false,
+      "energy_eur_kwh": {
+        "P1": 0.1549,
+        "P2": 0.1509,
+        "P3": 0.1469,
+        "P4": 0.1449,
+        "P5": 0.1159,
+        "P6": 0.1059
+      },
+      "margin_eur_kwh": null,
+      "power_charges_eur_kw_day": {
+        "P1": 0.060903,
+        "P2": 0.036886,
+        "P3": 0.017573,
+        "P4": 0.017573,
+        "P5": 0.017573,
+        "P6": 0.006065
+      },
+      "contracted_power_kw": {
+        "P1": 69,
+        "P2": 69,
+        "P3": 69,
+        "P4": 69,
+        "P5": 69,
+        "P6": 69
+      },
+      "injection_eur_kwh": 0.05,
+      "fixed_charges_eur_day": 1.659,
+      "discount_energy_pct": 0,
+      "id": "90cc13ce"
+    },
+    {
+      "supplier": "Endesa",
+      "name": "3.0TD Open Plana",
+      "type": "fixed",
+      "is_current": false,
+      "energy_eur_kwh": {
+        "P1": 0.119971,
+        "P2": 0.119971,
+        "P3": 0.119971,
+        "P4": 0.119971,
+        "P5": 0.119971,
+        "P6": 0.119971
+      },
+      "margin_eur_kwh": null,
+      "power_charges_eur_kw_day": {
+        "P1": 0.059937,
+        "P2": 0.033199,
+        "P3": 0.016387,
+        "P4": 0.014757,
+        "P5": 0.010997,
+        "P6": 0.008062
+      },
+      "contracted_power_kw": {
+        "P1": 69,
+        "P2": 69,
+        "P3": 69,
+        "P4": 69,
+        "P5": 69,
+        "P6": 69
+      },
+      "injection_eur_kwh": 0,
+      "fixed_charges_eur_day": 1.697,
+      "discount_energy_pct": 0,
+      "id": "02c11c2a"
+    },
+    {
+      "supplier": "Energya VM",
+      "name": "Fijo 3.0TD",
+      "type": "fixed",
+      "is_current": false,
+      "energy_eur_kwh": {
+        "P1": 0.169403,
+        "P2": 0.146715,
+        "P3": 0.125477,
+        "P4": 0.117964,
+        "P5": 0.098251,
+        "P6": 0.115034
+      },
+      "margin_eur_kwh": null,
+      "power_charges_eur_kw_day": {
+        "P1": 0.055825,
+        "P2": 0.029096,
+        "P3": 0.012262,
+        "P4": 0.010652,
+        "P5": 0.006871,
+        "P6": 0.003945
+      },
+      "contracted_power_kw": {
+        "P1": 69,
+        "P2": 69,
+        "P3": 69,
+        "P4": 69,
+        "P5": 69,
+        "P6": 69
+      },
+      "injection_eur_kwh": 0,
+      "fixed_charges_eur_day": 1.697,
+      "discount_energy_pct": 0,
+      "id": "f8e1b31a"
+    },
+    {
+      "supplier": "Nexus Energ\u00eda",
+      "name": "TULUZ E1",
+      "type": "fixed",
+      "is_current": false,
+      "energy_eur_kwh": {
+        "P1": 0.178197,
+        "P2": 0.147212,
+        "P3": 0.116738,
+        "P4": 0.091957,
+        "P5": 0.073852,
+        "P6": 0.089758
+      },
+      "margin_eur_kwh": null,
+      "power_charges_eur_kw_day": {
+        "P1": 0.055827,
+        "P2": 0.029089,
+        "P3": 0.012278,
+        "P4": 0.010647,
+        "P5": 0.006887,
+        "P6": 0.003951
+      },
+      "contracted_power_kw": {
+        "P1": 69,
+        "P2": 69,
+        "P3": 69,
+        "P4": 69,
+        "P5": 69,
+        "P6": 69
+      },
+      "injection_eur_kwh": 0,
+      "fixed_charges_eur_day": 6.042,
+      "discount_energy_pct": 0,
+      "id": "d3416e93"
+    },
+    {
+      "supplier": "Som Energia",
+      "name": "Indexada empresa (OF26017)",
+      "type": "indexed",
+      "is_current": false,
+      "energy_eur_kwh": null,
+      "margin_eur_kwh": 0.009680,
+      "power_charges_eur_kw_day": {
+        "P1": 0.055827,
+        "P2": 0.029089,
+        "P3": 0.012278,
+        "P4": 0.010648,
+        "P5": 0.006887,
+        "P6": 0.003951
+      },
+      "contracted_power_kw": {
+        "P1": 69,
+        "P2": 69,
+        "P3": 69,
+        "P4": 69,
+        "P5": 69,
+        "P6": 69
+      },
+      "injection_eur_kwh": 0,
+      "fixed_charges_eur_day": 1.659,
+      "discount_energy_pct": 0,
+      "id": "som-energia-idx"
     }
   ]
 }
