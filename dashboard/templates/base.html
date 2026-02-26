@@ -32,6 +32,7 @@
         <a href="{{ url_for('index') }}" class="{% if request.endpoint == 'index' %}active{% endif %}">Dashboard</a>
         <a href="{{ url_for('factures') }}" class="{% if request.endpoint in ('factures', 'factures_upload', 'factures_analysis') %}active{% endif %}">Factures</a>
         <a href="{{ url_for('comparador') }}" class="{% if request.endpoint == 'comparador' %}active{% endif %}">Comparador</a>
+        <a href="{{ url_for('estadistiques') }}" class="{% if request.endpoint == 'estadistiques' %}active{% endif %}">Estad&iacute;stiques</a>
         <a href="{{ url_for('historic') }}" class="{% if request.endpoint == 'historic' %}active{% endif %}">Hist&ograve;ric</a>
         <a href="{{ url_for('configuracio') }}" class="{% if request.endpoint in ('configuracio', 'save_configuracio') %}active{% endif %}">Configuraci&oacute;</a>
     </nav>

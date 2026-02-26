@@ -79,16 +79,21 @@ def invalidate_pricing_caches():
 
 
 def _load_indexed_tariff():
-    """Load indexed tariff components from pricing.json (cached)."""
+    """Load indexed tariff components from pricing.json (cached).
+
+    Includes contract formula parameters for the full clause 2b computation.
+    """
     global _indexed_tariff_cache
     if _indexed_tariff_cache is None:
         with open(PRICING_PATH) as f:
             data = json.load(f)
         block = data["indexed_tariff"]
+        sc_sidx = data.get("scenarios", {}).get("som_indexada", {})
         _indexed_tariff_cache = {
             "peajes": block["peajes_eur_kwh"],
             "cargos": block["cargos_eur_kwh"],
             "margin": block["margin_comercialitzadora_eur_kwh"],
+            "contract_formula": sc_sidx.get("contract_formula", {}),
         }
     return _indexed_tariff_cache
 
@@ -433,10 +438,17 @@ def _compute_weighted_costs(omie_hours, import_hours, tariff):
 
     Returns (cost_indexed, cost_fixed, imported_kwh, indexed_hourly_chart).
     Uses per-period energy rates from pricing.json for the fixed cost.
+    Uses full contract formula (clause 2b) for indexed cost:
+      PH = mult × [(OMIE + other) × (1 + losses) + FE + margin] + PTD + CA
     """
     peajes = tariff["peajes"]
     cargos = tariff["cargos"]
     margin = tariff["margin"]
+    cf = tariff.get("contract_formula", {})
+    cf_mult = cf.get("adjustment_multiplier", 1.0)
+    cf_other = cf.get("other_costs_eur_kwh", 0.0)
+    cf_losses = cf.get("loss_coefficient", 0.0)
+    cf_fe = cf.get("efficiency_fund_eur_kwh", 0.0)
     energy_rates = _get_energy_rates()
 
     # Build dicts keyed by hour (truncated to hour)
@@ -460,7 +472,8 @@ def _compute_weighted_costs(omie_hours, import_hours, tariff):
         omie_price = omie_by_hour.get(hour, 0.0)
         imp_kwh = import_by_hour.get(hour, 0.0)
         period = _get_period(hour)
-        real_indexed = omie_price + peajes[period] + cargos[period] + margin
+        inner = (omie_price + cf_other) * (1 + cf_losses) + cf_fe + margin
+        real_indexed = cf_mult * inner + peajes[period] + cargos[period]
 
         indexed_hourly.append({
             "x": hour.isoformat(),
@@ -498,14 +511,19 @@ def get_mercat_omie():
           |> last()
     ''')
 
-    # Current period and real indexed rate right now
+    # Current period and real indexed rate right now (full contract formula)
     now = _cet_now()
     current_period = _get_period(now)
+    cf = tariff.get("contract_formula", {})
+    cf_mult = cf.get("adjustment_multiplier", 1.0)
+    cf_other = cf.get("other_costs_eur_kwh", 0.0)
+    cf_losses = cf.get("loss_coefficient", 0.0)
+    cf_fe = cf.get("efficiency_fund_eur_kwh", 0.0)
+    _inner = (omie_eur_kwh + cf_other) * (1 + cf_losses) + cf_fe + tariff["margin"]
     current_indexed_real = (
-        omie_eur_kwh
+        cf_mult * _inner
         + tariff["peajes"][current_period]
         + tariff["cargos"][current_period]
-        + tariff["margin"]
     )
 
     # --- Today: hourly OMIE prices + hourly import ---
@@ -781,17 +799,195 @@ def _historical_daily_profile():
     }
 
 
-def _project_month(month, year, profile, pricing, avg_indexed_rate):
-    """Project energy balance and bill for a single calendar month.
+def _compute_scenario_costs_month():
+    """Query current month's hourly data and compute per-scenario costs.
 
-    Uses the historical daily profile adjusted by the seasonal solar factor
-    for the target month.  Returns (net_fix, net_idx).
+    Returns dict with per-scenario energy costs, surplus values,
+    total import/export, and per-scenario avg rates for projection.
+    Returns None if no data available.
+    """
+    bucket = INFLUXDB_BUCKET
+    month = _month_start_iso()
+
+    import_hours = _hourly_records(f'''
+        from(bucket: "{bucket}")
+          |> range(start: {month})
+          |> filter(fn: (r) => r._measurement == "ksem")
+          |> filter(fn: (r) => r._field == "energy_import_total")
+          |> aggregateWindow(every: 1h, fn: spread, createEmpty: false)
+    ''')
+    export_hours = _hourly_records(f'''
+        from(bucket: "{bucket}")
+          |> range(start: {month})
+          |> filter(fn: (r) => r._measurement == "ksem")
+          |> filter(fn: (r) => r._field == "energy_export_total")
+          |> aggregateWindow(every: 1h, fn: spread, createEmpty: false)
+    ''')
+    omie_hours = _hourly_records(f'''
+        from(bucket: "{bucket}")
+          |> range(start: {month})
+          |> filter(fn: (r) => r._measurement == "omie_prices")
+          |> filter(fn: (r) => r._field == "price_eur_kwh")
+          |> aggregateWindow(every: 1h, fn: mean, createEmpty: false)
+    ''')
+
+    # Build lookup dicts keyed by hour
+    def _hk(t):
+        return t.replace(minute=0, second=0, microsecond=0)
+
+    import_by_hour = {_hk(t): kwh for t, kwh in import_hours if kwh <= 200}
+    export_by_hour = {_hk(t): kwh for t, kwh in export_hours if kwh <= 200}
+    omie_by_hour = {_hk(t): p for t, p in omie_hours}
+
+    if not import_by_hour and not export_by_hour:
+        return None
+
+    pricing = _load_pricing()
+    scenarios = pricing.get("scenarios", {})
+    sc_iber = scenarios.get("iberdrola", {})
+    sc_hola = scenarios.get("holaluz", {})
+    sc_sper = scenarios.get("som_periodes", {})
+    sc_sidx = scenarios.get("som_indexada", {})
+
+    iber_rates = sc_iber.get("energy_eur_kwh", {})
+    hola_rates = sc_hola.get("energy_eur_kwh", {})
+    sper_rates = sc_sper.get("energy_eur_kwh", {})
+
+    iber_surplus_rate = sc_iber.get("surplus_eur_kwh", 0.05)
+    hola_surplus_rate = sc_hola.get("surplus_eur_kwh", 0.05)
+    sper_surplus_rate = sc_sper.get("surplus_eur_kwh", 0.03)
+
+    # Contract formula params for Som Indexada
+    idx_margin = sc_sidx.get("margin_eur_kwh", 0.009680)
+    peajes = pricing["indexed_tariff"]["peajes_eur_kwh"]
+    cargos = pricing["indexed_tariff"]["cargos_eur_kwh"]
+    cf = sc_sidx.get("contract_formula", {})
+    cf_mult = cf.get("adjustment_multiplier", 1.0)
+    cf_other = cf.get("other_costs_eur_kwh", 0.0)
+    cf_losses = cf.get("loss_coefficient", 0.0)
+    cf_fe = cf.get("efficiency_fund_eur_kwh", 0.0)
+
+    result = {
+        "energy_iber": 0.0, "energy_hola": 0.0,
+        "energy_sper": 0.0, "energy_sidx": 0.0,
+        "surplus_iber": 0.0, "surplus_hola": 0.0,
+        "surplus_sper": 0.0, "surplus_sidx": 0.0,
+        "total_import": 0.0, "total_export": 0.0,
+        "omie_sum": 0.0, "omie_count": 0,
+    }
+
+    all_hours = sorted(set(import_by_hour) | set(omie_by_hour))
+    for hour in all_hours:
+        imp_kwh = import_by_hour.get(hour, 0.0)
+        exp_kwh = export_by_hour.get(hour, 0.0)
+        omie_price = omie_by_hour.get(hour, None)
+        period = _get_period(hour)
+
+        if omie_price is not None:
+            result["omie_sum"] += omie_price
+            result["omie_count"] += 1
+
+        if imp_kwh > 0 and omie_price is not None:
+            result["energy_iber"] += imp_kwh * iber_rates.get(period, 0.153962)
+            result["energy_hola"] += imp_kwh * hola_rates.get(period, 0.14)
+            result["energy_sper"] += imp_kwh * sper_rates.get(period, 0.13)
+            inner = (omie_price + cf_other) * (1 + cf_losses) + cf_fe + idx_margin
+            ph = cf_mult * inner + peajes[period] + cargos[period]
+            result["energy_sidx"] += imp_kwh * ph
+            result["total_import"] += imp_kwh
+
+        if exp_kwh > 0:
+            result["surplus_iber"] += exp_kwh * iber_surplus_rate
+            result["surplus_hola"] += exp_kwh * hola_surplus_rate
+            result["surplus_sper"] += exp_kwh * sper_surplus_rate
+            if omie_price is not None:
+                result["surplus_sidx"] += exp_kwh * omie_price
+            result["total_export"] += exp_kwh
+
+    # Handle export-only hours not in all_hours
+    for hour in sorted(export_by_hour):
+        if hour not in set(import_by_hour) and hour not in set(omie_by_hour):
+            exp_kwh = export_by_hour[hour]
+            result["total_export"] += exp_kwh
+            result["surplus_iber"] += exp_kwh * iber_surplus_rate
+            result["surplus_hola"] += exp_kwh * hola_surplus_rate
+            result["surplus_sper"] += exp_kwh * sper_surplus_rate
+
+    # Compute avg rates for projection
+    ti = result["total_import"]
+    result["avg_rate_iber"] = result["energy_iber"] / ti if ti > 0 else 0.153962
+    result["avg_rate_hola"] = result["energy_hola"] / ti if ti > 0 else 0.14
+    result["avg_rate_sper"] = result["energy_sper"] / ti if ti > 0 else 0.13
+    result["avg_rate_sidx"] = result["energy_sidx"] / ti if ti > 0 else 0.10
+    result["avg_omie"] = result["omie_sum"] / result["omie_count"] if result["omie_count"] > 0 else 0.0
+
+    return result
+
+
+def _scenario_power_cost(scenario_key, pricing, days):
+    """Compute power charges for a scenario over a number of days."""
+    scenarios = pricing.get("scenarios", {})
+    sc = scenarios.get(scenario_key, {})
+    contracted = pricing["contracted_power_kw"]
+
+    pwr_day = sc.get("power_charges_eur_kw_day")
+    pwr_year = sc.get("power_charges_eur_kw_year")
+
+    cost = 0.0
+    if pwr_day:
+        for p in ["P1", "P2", "P3", "P4", "P5", "P6"]:
+            cost += contracted.get(p, 69) * pwr_day.get(p, 0) * days
+    elif pwr_year:
+        for p in ["P1", "P2", "P3", "P4", "P5", "P6"]:
+            cost += contracted.get(p, 69) * (pwr_year.get(p, 0) / 365) * days
+    else:
+        # Fallback to top-level power charges
+        for p, rate in pricing.get("power_charges_eur_kw_day", {}).items():
+            cost += contracted.get(p, 69) * rate * days
+    return cost
+
+
+def _compute_regulation_bill(energy_cost, surplus_value, power_cost, days, pricing):
+    """Compute bill following Spanish regulation.
+
+    1. compensated = min(energy_cost, surplus_value)
+    2. subtotal = (energy - compensated) + power_cost
+    3. IEE = subtotal * 5.11%
+    4. fixed_charges = (equipment_rental + bono_social) * days
+    5. total = (subtotal + IEE + fixed_charges) * 1.21
+    """
+    elec_tax_pct = pricing["taxes"]["electricity_tax_pct"] / 100
+    iva_pct = pricing["taxes"]["iva_pct"] / 100
+    fixed_daily = sum(pricing["fixed_charges_eur_day"].values())
+    fixed_charges = fixed_daily * days
+
+    compensated = min(energy_cost, surplus_value)
+    subtotal = (energy_cost - compensated) + power_cost
+    iee = subtotal * elec_tax_pct
+    total = (subtotal + iee + fixed_charges) * (1 + iva_pct)
+
+    return {
+        "energia": round(energy_cost, 2),
+        "potencia": round(power_cost, 2),
+        "imp_electric": round(iee, 2),
+        "fixes": round(fixed_charges, 2),
+        "iva": round((subtotal + iee + fixed_charges) * iva_pct, 2),
+        "compensacio": round(compensated, 2),
+        "net": round(total, 2),
+    }
+
+
+def _project_month(month, year, profile, pricing, scenario_rates):
+    """Project bill for a single calendar month for all 4 scenarios.
+
+    Uses the historical daily profile adjusted by seasonal solar factor.
+    scenario_rates: dict with avg_rate_X and surplus rate per scenario.
+    Returns dict of {scenario_key: net_bill}.
     """
     days = calendar.monthrange(year, month)[1]
     factor = _SOLAR_MONTH_FACTOR[month]
     avg_sf = profile["avg_seasonal_factor"]
 
-    # Scale generation by seasonal factor; consumption is ~stable
     daily_gen = profile["avg_gen"] * factor / avg_sf
     daily_cons = profile["avg_consumption"]
     daily_self = min(daily_gen, daily_cons)
@@ -801,47 +997,28 @@ def _project_month(month, year, profile, pricing, avg_indexed_rate):
     month_import = daily_import * days
     month_export = daily_export * days
 
-    # Energy costs — fixed uses contracted rate, indexed uses observed avg
-    fixed_rate = pricing["energy"]["effective_rate_eur_kwh"]
-    injection_price = pricing["injection"]["price_eur_kwh"]
+    result = {}
+    for key in ["iberdrola", "holaluz", "som_periodes", "som_indexada"]:
+        energy = month_import * scenario_rates[f"avg_rate_{key}"]
+        surplus_rate = scenario_rates[f"surplus_rate_{key}"]
+        surplus = month_export * surplus_rate
+        power_cost = _scenario_power_cost(key, pricing, days)
+        bill = _compute_regulation_bill(energy, surplus, power_cost, days, pricing)
+        result[key] = bill["net"]
 
-    energy_fix = month_import * fixed_rate
-    energy_idx = month_import * avg_indexed_rate
-    compensacio = month_export * injection_price
-
-    # Power charges
-    power_cost = 0.0
-    for period, rate in pricing["power_charges_eur_kw_day"].items():
-        kw = pricing["contracted_power_kw"].get(period, 69)
-        power_cost += rate * kw * days
-
-    # Fixed charges
-    fixed_daily = sum(pricing["fixed_charges_eur_day"].values())
-    fixed_charges = fixed_daily * days
-
-    # Taxes
-    elec_tax = pricing["taxes"]["electricity_tax_pct"] / 100
-    iva = pricing["taxes"]["iva_pct"] / 100
-
-    def _bill(energy_cost):
-        base = energy_cost + power_cost
-        imp = base * elec_tax
-        sub = base + imp + fixed_charges
-        vat = sub * iva
-        return round(sub + vat - compensacio, 2)
-
-    return _bill(energy_fix), _bill(energy_idx)
+    return result
 
 
-def get_previsio_factura(mercat_data):
-    """Project full electricity bill (monthly + annual) for treasury management.
+def get_previsio_factura(mercat_data=None):
+    """Project full electricity bill (monthly + annual) for 4 scenarios.
 
-    Monthly projection: actual data for elapsed days + seasonal model for
-    remaining days (or linear extrapolation as fallback).
+    Monthly projection: actual hourly data for elapsed days + seasonal model
+    for remaining days (or linear extrapolation as fallback).
 
     Annual projection: sum of 12 individually projected months using a
-    seasonal solar model calibrated from ALL historical data, instead of
-    the naive ``current_month × 12``.
+    seasonal solar model calibrated from ALL historical data.
+
+    Scenarios: Iberdrola, Holaluz, Som Períodes, Som Indexada.
     """
     pricing = _load_pricing()
     now = _cet_now()
@@ -851,19 +1028,26 @@ def get_previsio_factura(mercat_data):
     remaining_days = days_in_month - days_elapsed
     ratio = days_in_month / max(days_elapsed, 0.5)
 
-    # Actual energy data for the current month so far (from mercat)
-    actual_cost_fix = mercat_data["cost_fixed_month"]
-    actual_cost_idx = mercat_data["cost_indexed_month"]
-    actual_export = _export_kwh(_month_start_iso())
-    actual_import = _import_kwh(_month_start_iso())
+    # Actual hourly data for all 4 scenarios
+    actual = _compute_scenario_costs_month()
 
-    injection_price = pricing["injection"]["price_eur_kwh"]
-
-    # --- Historical profile for seasonal model ---
     profile = _historical_daily_profile()
 
-    if profile:
-        # --- MONTHLY: actual elapsed + seasonal estimate for remaining days ---
+    scenario_keys = ["iberdrola", "holaluz", "som_periodes", "som_indexada"]
+    short = {"iberdrola": "iber", "holaluz": "hola",
+             "som_periodes": "sper", "som_indexada": "sidx"}
+
+    # Surplus rates for projection
+    scenarios_cfg = pricing.get("scenarios", {})
+    surplus_rates = {
+        "iberdrola": scenarios_cfg.get("iberdrola", {}).get("surplus_eur_kwh", 0.05),
+        "holaluz": scenarios_cfg.get("holaluz", {}).get("surplus_eur_kwh", 0.05),
+        "som_periodes": scenarios_cfg.get("som_periodes", {}).get("surplus_eur_kwh", 0.03),
+        "som_indexada": actual["avg_omie"] if actual and actual["avg_omie"] > 0 else 0.05,
+    }
+
+    if actual and profile:
+        # --- MONTHLY: actual + seasonal estimate for remaining days ---
         factor = _SOLAR_MONTH_FACTOR[now.month]
         avg_sf = profile["avg_seasonal_factor"]
         daily_gen = profile["avg_gen"] * factor / avg_sf
@@ -872,94 +1056,83 @@ def get_previsio_factura(mercat_data):
         daily_export = max(daily_gen - daily_self, 0)
         daily_import = max(daily_cons - daily_self, 0)
 
-        fixed_rate = _get_effective_rate()
-
-        # Average observed indexed rate from this month's real OMIE data.
-        # This is the best proxy for future indexed costs.
-        if actual_import > 0:
-            avg_idx_rate = actual_cost_idx / actual_import
-        else:
-            avg_idx_rate = mercat_data.get("current_indexed_real", fixed_rate)
-
-        energy_fix = actual_cost_fix + daily_import * remaining_days * fixed_rate
-        energy_idx = actual_cost_idx + daily_import * remaining_days * avg_idx_rate
-        export_projected = actual_export + daily_export * remaining_days
-        compensacio = round(export_projected * injection_price, 2)
+        mensual = {}
+        for key in scenario_keys:
+            s = short[key]
+            avg_rate = actual[f"avg_rate_{s}"]
+            energy_projected = actual[f"energy_{s}"] + daily_import * remaining_days * avg_rate
+            surplus_projected = actual[f"surplus_{s}"] + daily_export * remaining_days * surplus_rates[key]
+            power_cost = _scenario_power_cost(key, pricing, days_in_month)
+            mensual[key] = _compute_regulation_bill(
+                energy_projected, surplus_projected, power_cost, days_in_month, pricing
+            )
 
         # --- ANNUAL: sum of 12 individually projected months ---
-        anual_fix = 0.0
-        anual_idx = 0.0
+        proj_rates = {}
+        for key in scenario_keys:
+            s = short[key]
+            proj_rates[f"avg_rate_{key}"] = actual[f"avg_rate_{s}"]
+            proj_rates[f"surplus_rate_{key}"] = surplus_rates[key]
+
+        anual = {}
+        for key in scenario_keys:
+            anual[key] = 0.0
         for m in range(1, 13):
-            mf, mi = _project_month(m, now.year, profile, pricing, avg_idx_rate)
-            anual_fix += mf
-            anual_idx += mi
+            month_bills = _project_month(m, now.year, profile, pricing, proj_rates)
+            for key in scenario_keys:
+                anual[key] += month_bills[key]
+        for key in scenario_keys:
+            anual[key] = round(anual[key], 2)
 
         projection_method = "seasonal"
         hist_days = profile["num_days"]
-    else:
+
+    elif actual:
         # Fallback: linear extrapolation (insufficient historical data)
-        energy_fix = actual_cost_fix * ratio
-        energy_idx = actual_cost_idx * ratio
-        export_projected = actual_export * ratio
-        compensacio = round(export_projected * injection_price, 2)
-        anual_fix = None  # computed below from monthly
-        anual_idx = None
+        mensual = {}
+        for key in scenario_keys:
+            s = short[key]
+            energy_projected = actual[f"energy_{s}"] * ratio
+            surplus_projected = actual[f"surplus_{s}"] * ratio
+            power_cost = _scenario_power_cost(key, pricing, days_in_month)
+            mensual[key] = _compute_regulation_bill(
+                energy_projected, surplus_projected, power_cost, days_in_month, pricing
+            )
+
+        anual = {key: round(mensual[key]["net"] * 12, 2) for key in scenario_keys}
         projection_method = "lineal"
         hist_days = 0
 
-    # Power charges — deterministic (same for both tariffs)
-    power_cost = 0.0
-    for period, rate in pricing["power_charges_eur_kw_day"].items():
-        kw = pricing["contracted_power_kw"].get(period, 69)
-        power_cost += rate * kw * days_in_month
-    power_cost = round(power_cost, 2)
-
-    # Fixed charges — deterministic
-    fixed_daily = sum(pricing["fixed_charges_eur_day"].values())
-    fixed_charges = round(fixed_daily * days_in_month, 2)
-
-    # Tax rates
-    elec_tax_pct = pricing["taxes"]["electricity_tax_pct"] / 100
-    iva_pct = pricing["taxes"]["iva_pct"] / 100
-
-    def _compute_bill(energy, comp):
-        base = energy + power_cost
-        impost = round(base * elec_tax_pct, 2)
-        subtotal = base + impost + fixed_charges
-        iva = round(subtotal * iva_pct, 2)
-        total = round(subtotal + iva, 2)
-        net = round(total - comp, 2)
-        return {
-            "energia": round(energy, 2),
-            "potencia": power_cost,
-            "impost_electric": impost,
-            "carregues_fixes": fixed_charges,
-            "iva": iva,
-            "total": total,
-            "compensacio": comp,
-            "net": net,
-        }
-
-    mensual_fix = _compute_bill(energy_fix, compensacio)
-    mensual_idx = _compute_bill(energy_idx, compensacio)
-
-    # Annual: use seasonal model if available, otherwise monthly × 12
-    if anual_fix is not None:
-        anual_fix_net = round(anual_fix, 2)
-        anual_idx_net = round(anual_idx, 2)
     else:
-        anual_fix_net = round(mensual_fix["net"] * 12, 2)
-        anual_idx_net = round(mensual_idx["net"] * 12, 2)
+        # No data at all — return zeroes
+        mensual = {}
+        for key in scenario_keys:
+            power_cost = _scenario_power_cost(key, pricing, days_in_month)
+            mensual[key] = _compute_regulation_bill(0, 0, power_cost, days_in_month, pricing)
+        anual = {key: round(mensual[key]["net"] * 12, 2) for key in scenario_keys}
+        projection_method = "lineal"
+        hist_days = 0
+
+    # Best alternative vs Iberdrola
+    iber_m = mensual["iberdrola"]["net"]
+    alt_mensual = {k: mensual[k]["net"] for k in scenario_keys if k != "iberdrola"}
+    millor_m = min(alt_mensual, key=alt_mensual.get)
+    estalvi_m = round(iber_m - alt_mensual[millor_m], 2)
+
+    iber_a = anual["iberdrola"]
+    alt_anual = {k: anual[k] for k in scenario_keys if k != "iberdrola"}
+    millor_a = min(alt_anual, key=alt_anual.get)
+    estalvi_a = round(iber_a - alt_anual[millor_a], 2)
 
     return {
+        "mensual": mensual,
+        "anual": anual,
+        "estalvi_mensual": estalvi_m,
+        "estalvi_anual": estalvi_a,
+        "millor_mensual": millor_m,
+        "millor_anual": millor_a,
         "days_elapsed": round(days_elapsed, 1),
         "days_in_month": days_in_month,
-        "mensual_fix": mensual_fix,
-        "mensual_indexat": mensual_idx,
-        "diff_mensual": round(mensual_fix["net"] - mensual_idx["net"], 2),
-        "anual_fix_net": anual_fix_net,
-        "anual_indexat_net": anual_idx_net,
-        "estalvi_anual_indexat": round(anual_fix_net - anual_idx_net, 2),
         "projection_method": projection_method,
         "hist_days": hist_days,
     }
@@ -1048,14 +1221,17 @@ def get_historic_data(time_range="30d"):
           |> aggregateWindow(every: 1h, fn: mean, createEmpty: false)
     ''')
 
-    # Compute full indexed rate per hour (period-aware)
+    # Compute full indexed rate per hour (period-aware, full contract formula)
+    cf = tariff.get("contract_formula", {})
+    cf_mult = cf.get("adjustment_multiplier", 1.0)
+    cf_other = cf.get("other_costs_eur_kwh", 0.0)
+    cf_losses = cf.get("loss_coefficient", 0.0)
+    cf_fe = cf.get("efficiency_fund_eur_kwh", 0.0)
     indexed_hourly = []
     for t_cet, omie_price in omie_hourly_raw:
         period = _get_period(t_cet)
-        full_rate = (omie_price
-                     + tariff["peajes"][period]
-                     + tariff["cargos"][period]
-                     + tariff["margin"])
+        inner = (omie_price + cf_other) * (1 + cf_losses) + cf_fe + tariff["margin"]
+        full_rate = cf_mult * inner + tariff["peajes"][period] + tariff["cargos"][period]
         indexed_hourly.append((t_cet, full_rate))
 
     if window == "1h":
@@ -1130,12 +1306,11 @@ def get_historic_data(time_range="30d"):
 
 def get_all_dashboard_data():
     """Aggregate all sections + timestamp for the API endpoint."""
-    mercat = get_mercat_omie()
     return {
         "economia": get_economia(),
         "energia": get_energia(),
-        "mercat": mercat,
-        "previsio": get_previsio_factura(mercat),
+        "mercat": get_mercat_omie(),
+        "previsio": get_previsio_factura(),
         "inversors": get_inversors(),
         "last_update": datetime.now(_CET).strftime("%H:%M:%S"),
     }

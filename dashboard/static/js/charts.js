@@ -298,7 +298,7 @@ function initYield30d(data) {
                 tooltip: {
                     callbacks: {
                         title: function(items) {
-                            const d = new Date(items[0].label);
+                            const d = new Date(items[0].parsed.x);
                             return d.toLocaleDateString('ca', { day: 'numeric', month: 'short' });
                         },
                         label: function(ctx) { return ctx.parsed.y.toFixed(1) + ' kWh'; }
@@ -366,7 +366,7 @@ function initOmieHourly(mercat) {
                 tooltip: {
                     callbacks: {
                         title: function(items) {
-                            const d = new Date(items[0].label);
+                            const d = new Date(items[0].parsed.x);
                             return d.toLocaleTimeString('ca', { hour: '2-digit', minute: '2-digit' });
                         },
                         label: function(ctx) { return ctx.dataset.label + ': ' + ctx.parsed.y.toFixed(4) + ' EUR/kWh'; }

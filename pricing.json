@@ -104,5 +104,94 @@
       "holidays": true,
       "months": "1-12"
     }
+  },
+  "scenarios": {
+    "iberdrola": {
+      "name": "Iberdrola Pla Estable",
+      "energy_eur_kwh": {
+        "P1": 0.153962,
+        "P2": 0.153962,
+        "P3": 0.153962,
+        "P4": 0.153962,
+        "P5": 0.153962,
+        "P6": 0.153962
+      },
+      "surplus_eur_kwh": 0.05,
+      "surplus_type": "fixed",
+      "power_charges_eur_kw_day": {
+        "P1": 0.060903,
+        "P2": 0.036886,
+        "P3": 0.017573,
+        "P4": 0.017573,
+        "P5": 0.017573,
+        "P6": 0.006065
+      }
+    },
+    "som_periodes": {
+      "name": "Som Energia Per\u00edodes",
+      "energy_eur_kwh": {
+        "P1": 0.176,
+        "P2": 0.154,
+        "P3": 0.129,
+        "P4": 0.123,
+        "P5": 0.125,
+        "P6": 0.118
+      },
+      "surplus_eur_kwh": 0.03,
+      "surplus_type": "fixed",
+      "power_charges_eur_kw_year": {
+        "P1": 20.376927,
+        "P2": 10.617621,
+        "P3": 4.481534,
+        "P4": 3.886333,
+        "P5": 2.513851,
+        "P6": 1.442287
+      }
+    },
+    "holaluz": {
+      "name": "Holaluz Fix",
+      "energy_eur_kwh": {
+        "P1": 0.163437,
+        "P2": 0.140197,
+        "P3": 0.120017,
+        "P4": 0.113347,
+        "P5": 0.111597,
+        "P6": 0.110027
+      },
+      "surplus_eur_kwh": 0.05,
+      "surplus_type": "fixed",
+      "power_charges_eur_kw_day": {
+        "P1": 0.061855,
+        "P2": 0.035665,
+        "P3": 0.018854,
+        "P4": 0.017223,
+        "P5": 0.013737,
+        "P6": 0.011075
+      }
+    },
+    "som_indexada": {
+      "name": "Som Energia Indexada + Flux Solar",
+      "margin_eur_kwh": 0.009680,
+      "surplus_type": "omie",
+      "contract_formula": {
+        "_comment": "PH = mult × [(OMIE + other_costs) × (1 + losses) + FE + margin] + PTD + CA",
+        "adjustment_multiplier": 1.015,
+        "other_costs_eur_kwh": 0.007,
+        "loss_coefficient": 0.12,
+        "efficiency_fund_eur_kwh": 0.001
+      },
+      "power_charges_eur_kw_year": {
+        "P1": 20.376927,
+        "P2": 10.617621,
+        "P3": 4.481534,
+        "P4": 3.886333,
+        "P5": 2.513851,
+        "P6": 1.442287
+      },
+      "flux_solar": {
+        "enabled": true,
+        "credit_pct": 0.80
+      }
+    }
   }
 }

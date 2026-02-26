@@ -3,8 +3,9 @@
 .env.*
 !.env.example
 
-# InfluxDB data
+# InfluxDB data & backups
 data/
+backups/
 
 # Python
 __pycache__/

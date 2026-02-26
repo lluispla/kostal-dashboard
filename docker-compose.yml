@@ -20,6 +20,45 @@ services:
       timeout: 5s
       retries: 5
 
+  backup:
+    image: influxdb:2
+    volumes:
+      - ./data:/var/lib/influxdb2:ro
+      - ./backups:/backups
+      - ./backup.sh:/backup.sh:ro
+    environment:
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=${INFLUXDB_TOKEN}
+      - BACKUP_KEEP_DAYS=${BACKUP_KEEP_DAYS:-7}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        echo "[backup] Waiting for InfluxDB to be ready..."
+        until influx ping --host http://influxdb:8086 2>/dev/null; do
+          sleep 5
+        done
+        echo "[backup] InfluxDB is ready. Running initial backup, then daily at 03:00 CET."
+        /bin/sh /backup.sh
+        while true; do
+          # Sleep until next 03:00 CET
+          TARGET_H=3
+          NOW_H=$$(date +%H | sed 's/^0//')
+          NOW_M=$$(date +%M | sed 's/^0//')
+          SECS_SINCE_MIDNIGHT=$$((NOW_H * 3600 + NOW_M * 60 + $$(date +%S | sed 's/^0//')))
+          TARGET_SECS=$$((TARGET_H * 3600))
+          if [ $$SECS_SINCE_MIDNIGHT -lt $$TARGET_SECS ]; then
+            WAIT=$$((TARGET_SECS - SECS_SINCE_MIDNIGHT))
+          else
+            WAIT=$$((86400 - SECS_SINCE_MIDNIGHT + TARGET_SECS))
+          fi
+          echo "[backup] Next backup in $${WAIT}s"
+          sleep $$WAIT
+          /bin/sh /backup.sh
+        done
+    depends_on:
+      influxdb:
+        condition: service_healthy
+    restart: unless-stopped
+
   collector:
     build: ./collector
     environment:
@@ -28,6 +67,7 @@ services:
       - KSEM_IP=${KSEM_IP}
       - POLL_INTERVAL=${POLL_INTERVAL}
       - OMIE_ENABLED=${OMIE_ENABLED}
+      - OMIE_BACKFILL_DAYS=${OMIE_BACKFILL_DAYS:-30}
       - INFLUXDB_URL=http://influxdb:8086
       - INFLUXDB_TOKEN=${INFLUXDB_TOKEN}
       - INFLUXDB_ORG=${INFLUXDB_ORG}

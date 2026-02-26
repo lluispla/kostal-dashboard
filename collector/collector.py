@@ -22,6 +22,7 @@ INVERTER_CI_IP = os.environ.get("INVERTER_CI_IP", "")
 KSEM_IP = os.environ.get("KSEM_IP", "")
 POLL_INTERVAL = int(os.environ.get("POLL_INTERVAL", 30))
 OMIE_ENABLED = os.environ.get("OMIE_ENABLED", "false").lower() == "true"
+OMIE_BACKFILL_DAYS = int(os.environ.get("OMIE_BACKFILL_DAYS", 30))
 INFLUXDB_URL = os.environ["INFLUXDB_URL"]
 INFLUXDB_TOKEN = os.environ["INFLUXDB_TOKEN"]
 INFLUXDB_ORG = os.environ["INFLUXDB_ORG"]
@@ -381,10 +382,98 @@ def fetch_omie_prices(write_api):
             log.exception("OMIE: failed to write prices for %s", date_str)
 
 
-def _omie_thread(write_api):
-    """Background thread: fetch OMIE prices on startup, then hourly."""
+def _omie_backfill(write_api, query_api):
+    """Check for OMIE price gaps in the last N days and backfill missing dates."""
+    if OMIE_BACKFILL_DAYS <= 0:
+        return
+
+    today = _cet_now().date()
+    start_date = today - timedelta(days=OMIE_BACKFILL_DAYS)
+
+    # Query InfluxDB for dates that already have OMIE data
+    flux = f'''
+        from(bucket: "{INFLUXDB_BUCKET}")
+          |> range(start: -{OMIE_BACKFILL_DAYS}d)
+          |> filter(fn: (r) => r._measurement == "omie_prices")
+          |> filter(fn: (r) => r._field == "price_eur_mwh")
+          |> aggregateWindow(every: 1d, fn: count, createEmpty: false)
+          |> filter(fn: (r) => r._value >= 20)
+    '''
+    existing_dates = set()
+    try:
+        tables = query_api.query(flux)
+        for table in tables:
+            for rec in table.records:
+                t = rec.get_time()
+                if t is not None:
+                    existing_dates.add(t.astimezone(CET).date())
+    except Exception:
+        log.exception("OMIE backfill: failed to query existing dates")
+        return
+
+    # Find missing dates (exclude tomorrow — may not be published yet)
+    missing = []
+    d = start_date
+    while d <= today:
+        if d not in existing_dates:
+            missing.append(d)
+        d += timedelta(days=1)
+
+    if not missing:
+        log.info("OMIE backfill: no gaps found in last %d days", OMIE_BACKFILL_DAYS)
+        return
+
+    log.info("OMIE backfill: found %d missing dates, fetching...", len(missing))
+    filled = 0
+    for d in missing:
+        date_str = d.strftime("%Y%m%d")
+        url = OMIE_URL.format(date=date_str)
+        try:
+            resp = requests.get(url, timeout=30)
+            if resp.status_code == 404:
+                log.debug("OMIE backfill: no file for %s (expected for future dates)", date_str)
+                continue
+            resp.raise_for_status()
+        except requests.RequestException as e:
+            log.warning("OMIE backfill: failed to fetch %s: %s", date_str, e)
+            continue
+
+        prices = _parse_omie_file(resp.text, d)
+        if not prices:
+            log.warning("OMIE backfill: no prices parsed for %s", date_str)
+            continue
+
+        points = []
+        for ts, eur_mwh in prices:
+            point = (
+                Point("omie_prices")
+                .time(ts)
+                .field("price_eur_mwh", float(eur_mwh))
+                .field("price_eur_kwh", float(eur_mwh / 1000.0))
+            )
+            points.append(point)
+
+        try:
+            write_api.write(bucket=INFLUXDB_BUCKET, record=points)
+            log.info("OMIE backfill: wrote %d points for %s", len(points), date_str)
+            filled += 1
+        except Exception:
+            log.exception("OMIE backfill: failed to write %s", date_str)
+
+        # Small delay to avoid hammering OMIE
+        time.sleep(0.5)
+
+    log.info("OMIE backfill: completed, filled %d/%d missing dates", filled, len(missing))
+
+
+def _omie_thread(write_api, query_api):
+    """Background thread: backfill gaps, fetch today+tomorrow, then hourly."""
     log.info("OMIE thread started")
-    # Initial fetch
+
+    # Backfill any gaps first
+    _omie_backfill(write_api, query_api)
+
+    # Normal fetch (today + tomorrow)
     fetch_omie_prices(write_api)
 
     schedule.every(1).hours.do(fetch_omie_prices, write_api)
@@ -406,12 +495,13 @@ def main():
 
     client = InfluxDBClient(url=INFLUXDB_URL, token=INFLUXDB_TOKEN, org=INFLUXDB_ORG)
     write_api = client.write_api(write_options=SYNCHRONOUS)
+    query_api = client.query_api()
 
     # Start OMIE background thread
     if OMIE_ENABLED:
-        omie = threading.Thread(target=_omie_thread, args=(write_api,), daemon=True)
+        omie = threading.Thread(target=_omie_thread, args=(write_api, query_api), daemon=True)
         omie.start()
-        log.info("OMIE price collector enabled")
+        log.info("OMIE price collector enabled (backfill: %d days)", OMIE_BACKFILL_DAYS)
     else:
         log.info("OMIE price collector disabled (set OMIE_ENABLED=true to enable)")
 

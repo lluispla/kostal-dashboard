@@ -12,6 +12,8 @@
     --text:       #1a1a2e;
     --muted:      #6c757d;
     --green:      #28a745;
+    --orange:     #E67E22;
+    --pink:       #E91E63;
     --yellow:     #f0ad4e;
     --shadow:     0 2px 8px rgba(0,0,0,0.08);
 }
@@ -148,6 +150,9 @@ body {
     gap: 1rem;
     margin-bottom: 1.5rem;
 }
+.kpi-grid.kpi-5col {
+    grid-template-columns: repeat(5, 1fr);
+}
 .kpi-row {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -206,8 +211,10 @@ body {
 .val-blue  { color: var(--blue); }
 .val-red   { color: var(--red); }
 .val-navy  { color: var(--navy); }
-.val-green { color: var(--green); }
-.val-muted { color: var(--muted); }
+.val-green  { color: var(--green); }
+.val-orange { color: var(--orange); }
+.val-pink   { color: var(--pink); }
+.val-muted  { color: var(--muted); }
 
 /* Period badge (P1-P6) */
 .period-badge {
@@ -1264,6 +1271,12 @@ body {
     gap: 1rem;
     margin-bottom: 1.5rem;
 }
+.historic-summary.kpi-5col {
+    grid-template-columns: repeat(5, 1fr);
+}
+.historic-summary.kpi-6col {
+    grid-template-columns: repeat(6, 1fr);
+}
 
 /* Zoom hint */
 .zoom-hint {
@@ -1298,6 +1311,9 @@ body {
     .settings-field { min-width: 80px; }
     .settings-periods .settings-field { min-width: 65px; }
     .historic-summary { grid-template-columns: repeat(2, 1fr); }
+    .kpi-grid.kpi-5col { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+    .historic-summary.kpi-5col { grid-template-columns: repeat(3, 1fr); }
+    .historic-summary.kpi-6col { grid-template-columns: repeat(3, 1fr); }
     .historic-chart-wrap { height: 260px; }
 }
 

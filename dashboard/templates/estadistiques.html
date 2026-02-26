@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}Estad&iacute;stiques{% endblock %}
+
+{% block header_right %}
+<span>Comparativa tarifes: Iberdrola vs Holaluz vs Som Energia</span>
+{% endblock %}
+
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3"></script>
+{% endblock %}
+
+{% block content %}
+<!-- Range selector -->
+<div class="range-bar">
+    <button class="range-btn active" data-range="3m">3m</button>
+    <button class="range-btn" data-range="6m">6m</button>
+    <button class="range-btn" data-range="1y">1y</button>
+    <button class="range-btn" data-range="all">Tot</button>
+</div>
+
+<!-- Data quality badge -->
+<div class="data-quality-badge" id="data-quality">
+    <span id="data-days">--</span> dies de dades
+</div>
+
+<!-- KPI cards — 6 columns -->
+<div class="historic-summary kpi-6col" id="kpi-cards">
+    <div class="kpi-card">
+        <div class="label">Iberdrola</div>
+        <div class="value val-navy"><span id="kpi-iberdrola">--</span><span class="unit">&euro;</span></div>
+    </div>
+    <div class="kpi-card">
+        <div class="label">Holaluz</div>
+        <div class="value val-pink"><span id="kpi-holaluz">--</span><span class="unit">&euro;</span></div>
+    </div>
+    <div class="kpi-card">
+        <div class="label">Som Per&iacute;odes</div>
+        <div class="value val-orange"><span id="kpi-som-periodes">--</span><span class="unit">&euro;</span></div>
+    </div>
+    <div class="kpi-card">
+        <div class="label">Som Indexada + Flux</div>
+        <div class="value val-blue"><span id="kpi-som-indexada">--</span><span class="unit">&euro;</span></div>
+    </div>
+    <div class="kpi-card">
+        <div class="label">Estalvi anual</div>
+        <div class="value" id="kpi-saving-wrap"><span id="kpi-saving">--</span><span class="unit">&euro;</span></div>
+    </div>
+    <div class="kpi-card">
+        <div class="label">OMIE equilibri</div>
+        <div class="value val-red"><span id="kpi-breakeven">--</span><span class="unit">&euro;/MWh</span></div>
+    </div>
+</div>
+
+<!-- Breakeven insight -->
+<div class="cost-badge" id="breakeven-insight" style="display:none;">
+    OMIE mitj&agrave; actual: <strong id="insight-current">--</strong> &euro;/MWh
+    &nbsp;&middot;&nbsp;
+    Marge fins equilibri: <strong id="insight-headroom">--</strong>%
+</div>
+
+<!-- Chart 1: Monthly bills comparison — 3 tariffs -->
+<div class="historic-chart-wrap" id="chart-wrap-bills">
+    <h3>Factura mensual: 4 tarifes</h3>
+    <canvas id="chart-bills"></canvas>
+</div>
+
+<!-- Chart 2: Cumulative savings vs Iberdrola -->
+<div class="historic-chart-wrap" id="chart-wrap-savings">
+    <h3>Estalvi acumulat vs Iberdrola</h3>
+    <canvas id="chart-savings"></canvas>
+</div>
+
+<!-- Chart 3: Flux Solar balance -->
+<div class="historic-chart-wrap" id="chart-wrap-flux">
+    <h3>Balan&ccedil; Flux Solar</h3>
+    <canvas id="chart-flux"></canvas>
+</div>
+
+<!-- Chart 4: Average OMIE price -->
+<div class="historic-chart-wrap" id="chart-wrap-omie">
+    <h3>Preu OMIE mitj&agrave; mensual</h3>
+    <canvas id="chart-omie-monthly"></canvas>
+</div>
+
+<!-- Monthly detail table — 12 columns -->
+<div class="comparison-table-wrap">
+    <table class="comparison-table" id="monthly-table">
+        <thead>
+            <tr>
+                <th>Mes</th>
+                <th>Dies</th>
+                <th>Import<small>kWh</small></th>
+                <th>Export<small>kWh</small></th>
+                <th>OMIE<small>&euro;/MWh</small></th>
+                <th>Iberdrola<small>&euro;</small></th>
+                <th>Holaluz<small>&euro;</small></th>
+                <th>Som Per.<small>&euro;</small></th>
+                <th>Som Idx.<small>&euro;</small></th>
+                <th>Flux<small>&euro;</small></th>
+                <th>Balan&ccedil;<small>&euro;</small></th>
+                <th>Millor</th>
+            </tr>
+        </thead>
+        <tbody id="monthly-tbody">
+        </tbody>
+    </table>
+</div>
+
+<!-- Loading overlay -->
+<div class="historic-loading" id="estadistiques-loading">Carregant dades...</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/estadistiques.js') }}"></script>
+{% endblock %}

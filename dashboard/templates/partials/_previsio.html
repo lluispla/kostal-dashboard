@@ -1,79 +1,129 @@
-<!-- Previsio factura — Projecció mensual i anual per tresoreria -->
+<!-- Previsio factura — 4-scenario projection (mensual + anual) -->
 <div class="section">
     <div class="section-header">
         <span class="icon">&#128176;</span>
         <h2>Previsi&oacute; factura</h2>
     </div>
 
-    <!-- Row 1 — Monthly projection -->
-    <div class="kpi-grid">
+    <!-- Row 1 — Monthly projection (5 cards) -->
+    <div class="kpi-grid kpi-5col">
         <div class="kpi-card">
-            <div class="label">Factura mensual (fixa)</div>
+            <div class="label">Iberdrola mensual</div>
             <div class="description">
-                Energia {{ "%.0f"|format(d.previsio.mensual_fix.energia) }} +
-                Pot&egrave;ncia {{ "%.0f"|format(d.previsio.mensual_fix.potencia) }} +
-                Imp. {{ "%.0f"|format(d.previsio.mensual_fix.impost_electric) }} +
-                Fixes {{ "%.0f"|format(d.previsio.mensual_fix.carregues_fixes) }} +
-                IVA {{ "%.0f"|format(d.previsio.mensual_fix.iva) }}
-                &minus; Comp. {{ "%.0f"|format(d.previsio.mensual_fix.compensacio) }}
+                E {{ "%.0f"|format(d.previsio.mensual.iberdrola.energia) }} +
+                P {{ "%.0f"|format(d.previsio.mensual.iberdrola.potencia) }} +
+                IEE {{ "%.0f"|format(d.previsio.mensual.iberdrola.imp_electric) }} +
+                F {{ "%.0f"|format(d.previsio.mensual.iberdrola.fixes) }} +
+                IVA {{ "%.0f"|format(d.previsio.mensual.iberdrola.iva) }}
+                &minus; C {{ "%.0f"|format(d.previsio.mensual.iberdrola.compensacio) }}
             </div>
             <div class="value val-navy">
-                <span data-field="previsio.mensual_fix.net" data-fmt="2">{{ "%.2f"|format(d.previsio.mensual_fix.net) }}</span>
+                <span data-field="previsio.mensual.iberdrola.net" data-fmt="2">{{ "%.2f"|format(d.previsio.mensual.iberdrola.net) }}</span>
                 <span class="unit">&euro;</span>
             </div>
         </div>
 
         <div class="kpi-card">
-            <div class="label">Factura mensual (indexada)</div>
+            <div class="label">Holaluz mensual</div>
             <div class="description">
-                Energia {{ "%.0f"|format(d.previsio.mensual_indexat.energia) }} +
-                Pot&egrave;ncia {{ "%.0f"|format(d.previsio.mensual_indexat.potencia) }} +
-                Imp. {{ "%.0f"|format(d.previsio.mensual_indexat.impost_electric) }} +
-                Fixes {{ "%.0f"|format(d.previsio.mensual_indexat.carregues_fixes) }} +
-                IVA {{ "%.0f"|format(d.previsio.mensual_indexat.iva) }}
-                &minus; Comp. {{ "%.0f"|format(d.previsio.mensual_indexat.compensacio) }}
+                E {{ "%.0f"|format(d.previsio.mensual.holaluz.energia) }} +
+                P {{ "%.0f"|format(d.previsio.mensual.holaluz.potencia) }} +
+                IEE {{ "%.0f"|format(d.previsio.mensual.holaluz.imp_electric) }} +
+                F {{ "%.0f"|format(d.previsio.mensual.holaluz.fixes) }} +
+                IVA {{ "%.0f"|format(d.previsio.mensual.holaluz.iva) }}
+                &minus; C {{ "%.0f"|format(d.previsio.mensual.holaluz.compensacio) }}
             </div>
-            <div class="value val-navy">
-                <span data-field="previsio.mensual_indexat.net" data-fmt="2">{{ "%.2f"|format(d.previsio.mensual_indexat.net) }}</span>
+            <div class="value val-pink">
+                <span data-field="previsio.mensual.holaluz.net" data-fmt="2">{{ "%.2f"|format(d.previsio.mensual.holaluz.net) }}</span>
                 <span class="unit">&euro;</span>
             </div>
         </div>
 
         <div class="kpi-card">
-            <div class="label">Difer&egrave;ncia mensual</div>
-            <div class="description">Positiu = la indexada &eacute;s m&eacute;s barata</div>
-            <div class="value {% if d.previsio.mensual_fix.net - d.previsio.mensual_indexat.net >= 0 %}val-green{% else %}val-red{% endif %}" data-diff-color>
-                <span data-field="previsio.diff_mensual" data-fmt="2">{{ "%.2f"|format(d.previsio.mensual_fix.net - d.previsio.mensual_indexat.net) }}</span>
+            <div class="label">Som Per&iacute;odes mensual</div>
+            <div class="description">
+                E {{ "%.0f"|format(d.previsio.mensual.som_periodes.energia) }} +
+                P {{ "%.0f"|format(d.previsio.mensual.som_periodes.potencia) }} +
+                IEE {{ "%.0f"|format(d.previsio.mensual.som_periodes.imp_electric) }} +
+                F {{ "%.0f"|format(d.previsio.mensual.som_periodes.fixes) }} +
+                IVA {{ "%.0f"|format(d.previsio.mensual.som_periodes.iva) }}
+                &minus; C {{ "%.0f"|format(d.previsio.mensual.som_periodes.compensacio) }}
+            </div>
+            <div class="value val-orange">
+                <span data-field="previsio.mensual.som_periodes.net" data-fmt="2">{{ "%.2f"|format(d.previsio.mensual.som_periodes.net) }}</span>
+                <span class="unit">&euro;</span>
+            </div>
+        </div>
+
+        <div class="kpi-card">
+            <div class="label">Som Indexada mensual</div>
+            <div class="description">
+                E {{ "%.0f"|format(d.previsio.mensual.som_indexada.energia) }} +
+                P {{ "%.0f"|format(d.previsio.mensual.som_indexada.potencia) }} +
+                IEE {{ "%.0f"|format(d.previsio.mensual.som_indexada.imp_electric) }} +
+                F {{ "%.0f"|format(d.previsio.mensual.som_indexada.fixes) }} +
+                IVA {{ "%.0f"|format(d.previsio.mensual.som_indexada.iva) }}
+                &minus; C {{ "%.0f"|format(d.previsio.mensual.som_indexada.compensacio) }}
+            </div>
+            <div class="value val-blue">
+                <span data-field="previsio.mensual.som_indexada.net" data-fmt="2">{{ "%.2f"|format(d.previsio.mensual.som_indexada.net) }}</span>
+                <span class="unit">&euro;</span>
+            </div>
+        </div>
+
+        <div class="kpi-card">
+            <div class="label">Estalvi mensual</div>
+            <div class="description">vs Iberdrola ({{ d.previsio.millor_mensual | replace("_", " ") | title }})</div>
+            <div class="value {% if d.previsio.estalvi_mensual >= 0 %}val-green{% else %}val-red{% endif %}" data-diff-color>
+                <span data-field="previsio.estalvi_mensual" data-fmt="2">{{ "%.2f"|format(d.previsio.estalvi_mensual) }}</span>
                 <span class="unit">&euro;</span>
             </div>
         </div>
     </div>
 
-    <!-- Row 2 — Annual projection -->
-    <div class="kpi-grid">
+    <!-- Row 2 — Annual projection (5 cards) -->
+    <div class="kpi-grid kpi-5col">
         <div class="kpi-card">
-            <div class="label">Factura anual (fixa)</div>
-            <div class="description">{% if d.previsio.projection_method == 'seasonal' %}Model estacional (12 mesos){% else %}Projecci&oacute; mensual &times; 12{% endif %}</div>
+            <div class="label">Iberdrola anual</div>
+            <div class="description">{% if d.previsio.projection_method == 'seasonal' %}Model estacional{% else %}Extrapolaci&oacute; lineal{% endif %}</div>
             <div class="value val-navy">
-                <span data-field="previsio.anual_fix_net" data-fmt="2">{{ "%.2f"|format(d.previsio.anual_fix_net) }}</span>
+                <span data-field="previsio.anual.iberdrola" data-fmt="2">{{ "%.2f"|format(d.previsio.anual.iberdrola) }}</span>
                 <span class="unit">&euro;</span>
             </div>
         </div>
 
         <div class="kpi-card">
-            <div class="label">Factura anual (indexada)</div>
-            <div class="description">{% if d.previsio.projection_method == 'seasonal' %}Model estacional (12 mesos){% else %}Projecci&oacute; mensual &times; 12{% endif %}</div>
-            <div class="value val-navy">
-                <span data-field="previsio.anual_indexat_net" data-fmt="2">{{ "%.2f"|format(d.previsio.anual_indexat_net) }}</span>
+            <div class="label">Holaluz anual</div>
+            <div class="description">{% if d.previsio.projection_method == 'seasonal' %}Model estacional{% else %}Extrapolaci&oacute; lineal{% endif %}</div>
+            <div class="value val-pink">
+                <span data-field="previsio.anual.holaluz" data-fmt="2">{{ "%.2f"|format(d.previsio.anual.holaluz) }}</span>
                 <span class="unit">&euro;</span>
             </div>
         </div>
 
         <div class="kpi-card">
-            <div class="label">Estalvi anual amb indexada</div>
-            <div class="description">M&egrave;trica clau per tresoreria</div>
-            <div class="value {% if d.previsio.estalvi_anual_indexat >= 0 %}val-green{% else %}val-red{% endif %}" data-diff-color>
-                <span data-field="previsio.estalvi_anual_indexat" data-fmt="2">{{ "%.2f"|format(d.previsio.estalvi_anual_indexat) }}</span>
+            <div class="label">Som Per&iacute;odes anual</div>
+            <div class="description">{% if d.previsio.projection_method == 'seasonal' %}Model estacional{% else %}Extrapolaci&oacute; lineal{% endif %}</div>
+            <div class="value val-orange">
+                <span data-field="previsio.anual.som_periodes" data-fmt="2">{{ "%.2f"|format(d.previsio.anual.som_periodes) }}</span>
+                <span class="unit">&euro;</span>
+            </div>
+        </div>
+
+        <div class="kpi-card">
+            <div class="label">Som Indexada anual</div>
+            <div class="description">{% if d.previsio.projection_method == 'seasonal' %}Model estacional{% else %}Extrapolaci&oacute; lineal{% endif %}</div>
+            <div class="value val-blue">
+                <span data-field="previsio.anual.som_indexada" data-fmt="2">{{ "%.2f"|format(d.previsio.anual.som_indexada) }}</span>
+                <span class="unit">&euro;</span>
+            </div>
+        </div>
+
+        <div class="kpi-card">
+            <div class="label">Estalvi anual</div>
+            <div class="description">vs Iberdrola ({{ d.previsio.millor_anual | replace("_", " ") | title }})</div>
+            <div class="value {% if d.previsio.estalvi_anual >= 0 %}val-green{% else %}val-red{% endif %}" data-diff-color>
+                <span data-field="previsio.estalvi_anual" data-fmt="2">{{ "%.2f"|format(d.previsio.estalvi_anual) }}</span>
                 <span class="unit">&euro;</span>
             </div>
         </div>
@@ -83,7 +133,7 @@
         {% if d.previsio.projection_method == 'seasonal' %}
         Mensual: dades reals ({{ "%.1f"|format(d.previsio.days_elapsed) }}d) + model estacional per als dies restants.
         Anual: projecci&oacute; de 12 mesos amb factors solars estacionals (PVGIS 41&deg;N), calibrats amb {{ d.previsio.hist_days }} dies hist&ograve;rics.
-        Millora autom&agrave;ticament a mesura que s'acumulen dades.
+        F&oacute;rmula factura: compensaci&oacute; limitada al cost energ&egrave;tic, impostos despr&eacute;s.
         {% else %}
         Projecci&oacute; basada en <span data-field="previsio.days_elapsed" data-fmt="1">{{ "%.1f"|format(d.previsio.days_elapsed) }}</span> dies de dades. Extrapolaci&oacute; lineal (dades insuficients per al model estacional).
         {% endif %}

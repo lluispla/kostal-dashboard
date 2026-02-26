@@ -10,6 +10,7 @@ from config import INVOICES_DIR, PRICING_PATH
 from data import get_all_dashboard_data, get_historic_data, _load_pricing, invalidate_pricing_caches
 from invoice import parse_invoice_pdf, build_analysis, list_invoices
 from comparador import get_comparador_data, add_offer, update_offer, delete_offer
+from simulator import get_estadistiques_data
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
@@ -46,6 +47,22 @@ def api_historic(time_range):
     if time_range not in ("7d", "30d", "90d", "1y", "all"):
         return jsonify({"error": "Invalid range"}), 400
     return jsonify(get_historic_data(time_range))
+
+
+# ---------------------------------------------------------------------------
+# Estadístiques
+# ---------------------------------------------------------------------------
+
+@app.route("/estadistiques")
+def estadistiques():
+    return render_template("estadistiques.html")
+
+
+@app.route("/api/estadistiques/<time_range>")
+def api_estadistiques(time_range):
+    if time_range not in ("3m", "6m", "1y", "all"):
+        return jsonify({"error": "Invalid range"}), 400
+    return jsonify(get_estadistiques_data(time_range))
 
 
 # ---------------------------------------------------------------------------
