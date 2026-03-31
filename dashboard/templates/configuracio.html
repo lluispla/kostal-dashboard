@@ -10,48 +10,47 @@
 
 <form id="settings-form" method="POST" action="{{ url_for('save_configuracio') }}">
 
-<!-- Energy rates -->
+<!-- Contract formula (Som Energia Indexada) -->
 <div class="section">
     <div class="section-header">
         <span class="icon">&#9889;</span>
-        <h2>Preu d'Energia (contracte fix actual)</h2>
+        <h2>F&oacute;rmula Contracte (Som Energia Indexada)</h2>
     </div>
-    <p class="section-help">Introdueix el preu d'energia del teu contracte. Si el preu &eacute;s el mateix per tots els per&iacute;odes,
-        escriu-lo al camp &laquo;Preu &uacute;nic&raquo; i prem &laquo;Aplicar a tots&raquo;.</p>
+    <p class="section-help">PH = mult &times; [(OMIE + altres_costos) &times; (1 + p&egrave;rdues) + FE + marge] + PTD + CA</p>
 
     <div class="settings-card">
-        <div class="settings-row" style="align-items: flex-end;">
-            <div class="settings-field" style="flex:2;">
-                <label for="s-flat-rate">Preu &uacute;nic (EUR/kWh)</label>
-                <input type="number" id="s-flat-rate" step="0.000001" min="0"
-                       value="{{ p.energy.effective_rate_eur_kwh }}" placeholder="0.154">
-            </div>
-            <button type="button" class="btn btn-sm" id="btn-apply-flat-rate">Aplicar a tots</button>
-        </div>
-
-        <div class="settings-row settings-periods">
-            {% for period in ['P1','P2','P3','P4','P5','P6'] %}
-            <div class="settings-field">
-                <label for="s-rate-{{ period }}">{{ period }} (EUR/kWh)</label>
-                <input type="number" id="s-rate-{{ period }}" name="rate_{{ period }}"
-                       step="0.000001" min="0"
-                       value="{{ p.energy.rates_eur_kwh[period] if p.energy.rates_eur_kwh is defined else p.energy.effective_rate_eur_kwh }}">
-            </div>
-            {% endfor %}
-        </div>
-
         <div class="settings-row">
-            <div class="settings-field" style="max-width:200px;">
-                <label for="s-discount">Descompte (%)</label>
-                <input type="number" id="s-discount" name="discount_pct"
-                       step="0.1" min="0" max="100"
-                       value="{{ p.energy.discount_pct }}">
+            <div class="settings-field">
+                <label for="s-cf-mult">Multiplicador (mult)</label>
+                <input type="number" id="s-cf-mult" name="cf_multiplier"
+                       step="0.001" min="0"
+                       value="{{ p.energy.contract_formula.adjustment_multiplier }}">
             </div>
-            <div class="settings-field" style="max-width:200px;">
-                <label for="s-base-rate">Preu base (EUR/kWh)</label>
-                <input type="number" id="s-base-rate" name="base_rate_eur_kwh"
-                       step="0.000001" min="0"
-                       value="{{ p.energy.base_rate_eur_kwh }}">
+            <div class="settings-field">
+                <label for="s-cf-other">Altres costos (EUR/kWh)</label>
+                <input type="number" id="s-cf-other" name="cf_other_costs"
+                       step="0.001" min="0"
+                       value="{{ p.energy.contract_formula.other_costs_eur_kwh }}">
+            </div>
+            <div class="settings-field">
+                <label for="s-cf-losses">Coef. p&egrave;rdues</label>
+                <input type="number" id="s-cf-losses" name="cf_losses"
+                       step="0.01" min="0"
+                       value="{{ p.energy.contract_formula.loss_coefficient }}">
+            </div>
+        </div>
+        <div class="settings-row">
+            <div class="settings-field">
+                <label for="s-cf-fe">Fons efici&egrave;ncia FE (EUR/kWh)</label>
+                <input type="number" id="s-cf-fe" name="cf_efficiency_fund"
+                       step="0.001" min="0"
+                       value="{{ p.energy.contract_formula.efficiency_fund_eur_kwh }}">
+            </div>
+            <div class="settings-field">
+                <label for="s-cf-margin">Franja cooperativa F (EUR/kWh)</label>
+                <input type="number" id="s-cf-margin" name="cf_margin"
+                       step="0.0001" min="0"
+                       value="{{ p.energy.contract_formula.margin_eur_kwh }}">
             </div>
         </div>
     </div>
@@ -65,7 +64,7 @@
         <span class="icon">&#9883;</span>
         <h2>Pot&egrave;ncia Contractada</h2>
     </div>
-    <p class="section-help">kW contractats i preu per kW/dia a cada per&iacute;ode. Normalment els preus de pot&egrave;ncia s&oacute;n regulats (iguals per totes les comercialitzadores).</p>
+    <p class="section-help">kW contractats i preu per kW/any a cada per&iacute;ode (terme de pot&egrave;ncia del contracte).</p>
 
     <div class="settings-card">
         <h4 class="settings-subtitle">kW contractats per per&iacute;ode</h4>
@@ -80,14 +79,14 @@
             {% endfor %}
         </div>
 
-        <h4 class="settings-subtitle" style="margin-top:1rem;">Preu de pot&egrave;ncia (EUR/kW/dia)</h4>
+        <h4 class="settings-subtitle" style="margin-top:1rem;">Preu de pot&egrave;ncia (EUR/kW/any)</h4>
         <div class="settings-row settings-periods">
             {% for period in ['P1','P2','P3','P4','P5','P6'] %}
             <div class="settings-field">
                 <label for="s-pcharge-{{ period }}">{{ period }}</label>
                 <input type="number" id="s-pcharge-{{ period }}" name="pcharge_{{ period }}"
                        step="0.000001" min="0"
-                       value="{{ p.power_charges_eur_kw_day[period] }}">
+                       value="{{ p.power_charges_eur_kw_year[period] }}">
             </div>
             {% endfor %}
         </div>
@@ -108,7 +107,7 @@
             <div class="settings-field">
                 <label for="s-elec-tax">Impost el&egrave;ctric (%)</label>
                 <input type="number" id="s-elec-tax" name="electricity_tax_pct"
-                       step="0.01" min="0"
+                       step="0.00001" min="0"
                        value="{{ p.taxes.electricity_tax_pct }}">
             </div>
             <div class="settings-field">
@@ -122,13 +121,13 @@
             <div class="settings-field">
                 <label for="s-rental">Lloguer equips (EUR/dia)</label>
                 <input type="number" id="s-rental" name="equipment_rental"
-                       step="0.001" min="0"
+                       step="0.000001" min="0"
                        value="{{ p.fixed_charges_eur_day.equipment_rental }}">
             </div>
             <div class="settings-field">
                 <label for="s-bono">Bo social (EUR/dia)</label>
                 <input type="number" id="s-bono" name="bono_social"
-                       step="0.001" min="0"
+                       step="0.000001" min="0"
                        value="{{ p.fixed_charges_eur_day.bono_social }}">
             </div>
         </div>
@@ -137,36 +136,14 @@
 
 <div class="martini-stripe-thin"></div>
 
-<!-- Injection compensation -->
-<div class="section">
-    <div class="section-header">
-        <span class="icon">&#9728;</span>
-        <h2>Compensaci&oacute; Excedents</h2>
-    </div>
-
-    <div class="settings-card">
-        <div class="settings-row">
-            <div class="settings-field" style="max-width:250px;">
-                <label for="s-injection">Preu compensaci&oacute; (EUR/kWh)</label>
-                <input type="number" id="s-injection" name="injection_price"
-                       step="0.001" min="0"
-                       value="{{ p.injection.price_eur_kwh }}">
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="martini-stripe-thin"></div>
-
-<!-- Indexed tariff components (advanced) -->
+<!-- Indexed tariff components (peajes + cargos) -->
 <div class="section">
     <details class="form-advanced" style="border:none; padding:0;">
         <summary class="section-header" style="cursor:pointer; margin-bottom:0.5rem;">
             <span class="icon">&#128202;</span>
-            <h2>Tarifa Indexada (avançat)</h2>
+            <h2>Peatges i C&agrave;rrecs Regulats (avan&ccedil;at)</h2>
         </summary>
-        <p class="section-help">Peatges i c&agrave;rrecs regulats (CNMC) + marge comercialitzadora per la tarifa indexada.
-            Nom&eacute;s cal canviar-los si els teus valors s&oacute;n diferents dels regulats.</p>
+        <p class="section-help">Peatges (CNMC) i c&agrave;rrecs (BOE) per energia. Nom&eacute;s cal canviar-los si s'actualitzen al BOE.</p>
 
         <div class="settings-card">
             <h4 class="settings-subtitle">Peatges d'acc&eacute;s (EUR/kWh)</h4>
@@ -205,6 +182,252 @@
     </details>
 </div>
 
+<div class="martini-stripe-thin"></div>
+
+<!-- Flux Solar -->
+<div class="section">
+    <div class="section-header">
+        <span class="icon">&#9728;</span>
+        <h2>Flux Solar</h2>
+    </div>
+    <p class="section-help">Configuraci&oacute; de la modalitat Flux Solar (autoconsum col&middot;lectiu amb cr&egrave;dit d'excedents).</p>
+
+    <div class="settings-card">
+        <div class="settings-row">
+            <div class="settings-field">
+                <label for="s-flux-enabled">Flux Solar actiu</label>
+                <input type="checkbox" id="s-flux-enabled" name="flux_enabled"
+                       style="width:auto; margin-top:0.3rem;"
+                       {% if p.get('scenarios', {}).get('som_indexada', {}).get('flux_solar', {}).get('enabled', False) %}checked{% endif %}>
+            </div>
+            <div class="settings-field">
+                <label for="s-flux-credit">Percentatge cr&egrave;dit</label>
+                <input type="number" id="s-flux-credit" name="flux_credit_pct"
+                       step="0.01" min="0" max="1"
+                       value="{{ p.get('scenarios', {}).get('som_indexada', {}).get('flux_solar', {}).get('credit_pct', 0.80) }}">
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="martini-stripe-thin"></div>
+
+<!-- Investment / Amortitzaci&oacute; -->
+<div class="section">
+    <div class="section-header">
+        <span class="icon">&#128200;</span>
+        <h2>Inversi&oacute; i Amortitzaci&oacute;</h2>
+    </div>
+    <p class="section-help">Par&agrave;metres de la instal&middot;laci&oacute; solar per al c&agrave;lcul d'amortitzaci&oacute; i ROI.</p>
+
+    <div class="settings-card">
+        <div class="settings-row">
+            <div class="settings-field">
+                <label for="s-inv-cost">Cost instal&middot;laci&oacute; (EUR)</label>
+                <input type="number" id="s-inv-cost" name="investment_cost"
+                       step="1" min="0"
+                       value="{{ p.get('investment', {}).get('installation_cost_eur', 50000) }}">
+            </div>
+            <div class="settings-field">
+                <label for="s-inv-date">Data instal&middot;laci&oacute;</label>
+                <input type="date" id="s-inv-date" name="investment_date"
+                       value="{{ p.get('investment', {}).get('installation_date', '2026-02-01') }}">
+            </div>
+            <div class="settings-field">
+                <label for="s-inv-lifetime">Vida &uacute;til (anys)</label>
+                <input type="number" id="s-inv-lifetime" name="investment_lifetime"
+                       step="1" min="1"
+                       value="{{ p.get('investment', {}).get('expected_lifetime_years', 25) }}">
+            </div>
+            <div class="settings-field">
+                <label for="s-inv-maint">Manteniment anual (EUR)</label>
+                <input type="number" id="s-inv-maint" name="investment_maintenance"
+                       step="1" min="0"
+                       value="{{ p.get('investment', {}).get('annual_maintenance_eur', 0) }}">
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="martini-stripe-thin"></div>
+
+<!-- Vehicle Elèctric (EV V2H) -->
+<div class="section">
+    <div class="section-header">
+        <span class="icon">&#9889;</span>
+        <h2>Vehicle El&egrave;ctric (V2H)</h2>
+    </div>
+    <p class="section-help">Par&agrave;metres del vehicle el&egrave;ctric i carregador bidireccional per a la simulaci&oacute; Solar-a-Casa.</p>
+
+    <div class="settings-card">
+        <div class="settings-row">
+            <div class="settings-field">
+                <label for="s-ev-enabled">M&ograve;dul actiu</label>
+                <input type="checkbox" id="s-ev-enabled" name="ev_enabled"
+                       style="width:auto; margin-top:0.3rem;"
+                       {% if p.get('ev_config', {}).get('enabled', False) %}checked{% endif %}>
+            </div>
+            <div class="settings-field">
+                <label for="s-ev-model">Model</label>
+                <input type="text" id="s-ev-model" name="ev_model"
+                       value="{{ p.get('ev_config', {}).get('model', 'KIA EV9 99.8 kWh') }}">
+            </div>
+            <div class="settings-field">
+                <label for="s-ev-battery">Bateria &uacute;til (kWh)</label>
+                <input type="number" id="s-ev-battery" name="ev_battery"
+                       step="0.1" min="0"
+                       value="{{ p.get('ev_config', {}).get('battery_kwh', 96) }}">
+            </div>
+        </div>
+        <div class="settings-row">
+            <div class="settings-field">
+                <label for="s-ev-charger">Carregador AC (kW)</label>
+                <input type="number" id="s-ev-charger" name="ev_charger"
+                       step="0.5" min="0"
+                       value="{{ p.get('ev_config', {}).get('charger_kw', 11) }}">
+            </div>
+            <div class="settings-field">
+                <label for="s-ev-v2h">V2H desc&agrave;rrega (kW)</label>
+                <input type="number" id="s-ev-v2h" name="ev_v2h"
+                       step="0.5" min="0"
+                       value="{{ p.get('ev_config', {}).get('v2h_kw', 11.5) }}">
+            </div>
+            <div class="settings-field">
+                <label for="s-ev-efficiency">Efici&egrave;ncia round-trip (0-1)</label>
+                <input type="number" id="s-ev-efficiency" name="ev_efficiency"
+                       step="0.01" min="0" max="1"
+                       value="{{ p.get('ev_config', {}).get('efficiency', 0.88) }}">
+            </div>
+        </div>
+        <div class="settings-row">
+            <div class="settings-field">
+                <label for="s-ev-driving">Consum diari conducci&oacute; (kWh)</label>
+                <input type="number" id="s-ev-driving" name="ev_driving"
+                       step="0.1" min="0"
+                       value="{{ p.get('ev_config', {}).get('daily_driving_kwh', 1.3) }}">
+            </div>
+            <div class="settings-field">
+                <label for="s-ev-home-rate">Tarifa llar (EUR/kWh)</label>
+                <input type="number" id="s-ev-home-rate" name="ev_home_rate"
+                       step="0.001" min="0"
+                       value="{{ p.get('ev_config', {}).get('home_rate_eur_kwh', 0.17) }}">
+            </div>
+            <div class="settings-field">
+                <label for="s-ev-charger-cost">Cost carregador V2H (EUR)</label>
+                <input type="number" id="s-ev-charger-cost" name="ev_charger_cost"
+                       step="1" min="0"
+                       value="{{ p.get('ev_config', {}).get('charger_cost_eur', 5000) }}">
+            </div>
+        </div>
+        <div class="settings-row">
+            <div class="settings-field">
+                <label for="s-ev-arrive">Hora arribada oficina</label>
+                <input type="time" id="s-ev-arrive" name="ev_arrive"
+                       value="{{ p.get('ev_config', {}).get('schedule_arrive', '08:00') }}">
+            </div>
+            <div class="settings-field">
+                <label for="s-ev-depart">Hora sortida oficina</label>
+                <input type="time" id="s-ev-depart" name="ev_depart"
+                       value="{{ p.get('ev_config', {}).get('schedule_depart', '18:00') }}">
+            </div>
+            <div class="settings-field">
+                <label for="s-ev-saturday">Dissabte</label>
+                <input type="checkbox" id="s-ev-saturday" name="ev_saturday"
+                       style="width:auto; margin-top:0.3rem;"
+                       {% if p.get('ev_config', {}).get('saturday', True) %}checked{% endif %}>
+            </div>
+            <div class="settings-field">
+                <label for="s-ev-sunday">Diumenge</label>
+                <input type="checkbox" id="s-ev-sunday" name="ev_sunday"
+                       style="width:auto; margin-top:0.3rem;"
+                       {% if p.get('ev_config', {}).get('sunday', False) %}checked{% endif %}>
+            </div>
+        </div>
+
+        <h4 class="settings-subtitle" style="margin-top:1.25rem;">Bateria llar + Aerot&egrave;rmia</h4>
+        <div class="settings-row">
+            <div class="settings-field">
+                <label for="s-ev-homebat">Bateria llar (kWh)</label>
+                <input type="number" id="s-ev-homebat" name="ev_home_battery"
+                       step="1" min="0"
+                       value="{{ p.get('ev_config', {}).get('home_battery_kwh', 20) }}">
+            </div>
+            <div class="settings-field">
+                <label for="s-ev-homebat-eff">Efic. bateria llar (0-1)</label>
+                <input type="number" id="s-ev-homebat-eff" name="ev_home_battery_eff"
+                       step="0.01" min="0" max="1"
+                       value="{{ p.get('ev_config', {}).get('home_battery_efficiency', 0.90) }}">
+            </div>
+            <div class="settings-field">
+                <label for="s-ev-elec-night">Consum el&egrave;ctric nit (kWh)</label>
+                <input type="number" id="s-ev-elec-night" name="ev_home_elec_night"
+                       step="0.5" min="0"
+                       value="{{ p.get('ev_config', {}).get('home_electrical_kwh_night', 5) }}">
+            </div>
+        </div>
+        <div class="settings-row">
+            <div class="settings-field">
+                <label for="s-ev-cop-heat">COP calefacci&oacute;</label>
+                <input type="number" id="s-ev-cop-heat" name="ev_cop_heating"
+                       step="0.1" min="1"
+                       value="{{ p.get('ev_config', {}).get('aerotermia_cop_heating', 3.0) }}">
+            </div>
+            <div class="settings-field">
+                <label for="s-ev-cop-cool">COP refrigeraci&oacute;</label>
+                <input type="number" id="s-ev-cop-cool" name="ev_cop_cooling"
+                       step="0.1" min="1"
+                       value="{{ p.get('ev_config', {}).get('aerotermia_cop_cooling', 2.5) }}">
+            </div>
+            <div class="settings-field">
+                <label for="s-ev-aero-kw">Pot&egrave;ncia aerot&egrave;rmia (kW)</label>
+                <input type="number" id="s-ev-aero-kw" name="ev_aerotermia_kw"
+                       step="0.5" min="0"
+                       value="{{ p.get('ev_config', {}).get('aerotermia_kw', 5) }}">
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="martini-stripe-thin"></div>
+
+<!-- Battery simulation -->
+<div class="section">
+    <div class="section-header">
+        <span class="icon">&#128267;</span>
+        <h2>Simulaci&oacute; Bateria</h2>
+    </div>
+    <p class="section-help">Par&agrave;metres de la bateria virtual per a la simulaci&oacute; d'emmagatzematge.</p>
+
+    <div class="settings-card">
+        <div class="settings-row">
+            <div class="settings-field">
+                <label for="s-bat-cap">Capacitat (kWh)</label>
+                <input type="number" id="s-bat-cap" name="bat_capacity"
+                       step="1" min="0"
+                       value="{{ p.get('battery_simulation', {}).get('capacity_kwh', 20) }}">
+            </div>
+            <div class="settings-field">
+                <label for="s-bat-charge">C&agrave;rrega m&agrave;x (kW)</label>
+                <input type="number" id="s-bat-charge" name="bat_max_charge"
+                       step="0.5" min="0"
+                       value="{{ p.get('battery_simulation', {}).get('max_charge_kw', 10) }}">
+            </div>
+            <div class="settings-field">
+                <label for="s-bat-discharge">Desc&agrave;rrega m&agrave;x (kW)</label>
+                <input type="number" id="s-bat-discharge" name="bat_max_discharge"
+                       step="0.5" min="0"
+                       value="{{ p.get('battery_simulation', {}).get('max_discharge_kw', 10) }}">
+            </div>
+            <div class="settings-field">
+                <label for="s-bat-eff">Efici&egrave;ncia round-trip (0-1)</label>
+                <input type="number" id="s-bat-eff" name="bat_efficiency"
+                       step="0.01" min="0" max="1"
+                       value="{{ p.get('battery_simulation', {}).get('round_trip_efficiency', 0.90) }}">
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Save button -->
 <div class="settings-actions">
     <button type="submit" class="btn btn-primary btn-lg">Desar configuraci&oacute;</button>
@@ -212,27 +435,80 @@
 
 </form>
 
-{% endblock %}
+<div class="martini-stripe-thin"></div>
 
-{% block scripts %}
+<!-- Data Recovery -->
+<div class="section">
+    <div class="section-header">
+        <span class="icon">&#128260;</span>
+        <h2>Recuperaci&oacute; de Dades</h2>
+    </div>
+    <p class="section-help">Detecta forats en les dades locals i els recupera del backup (Raspberry Pi).</p>
+
+    <div class="settings-card">
+        <div class="settings-row" style="align-items: flex-end;">
+            <div class="settings-field">
+                <label for="recover-hours">Finestra de cerca (hores)</label>
+                <input type="number" id="recover-hours" value="48" min="1" max="168" step="1">
+            </div>
+            <div class="settings-field">
+                <button type="button" id="btn-recover" class="btn btn-primary"
+                        onclick="recoverData()">Recuperar dades</button>
+            </div>
+        </div>
+        <div id="recover-status" style="display:none; margin-top: 1rem;"></div>
+    </div>
+</div>
+
 <script>
-document.getElementById('btn-apply-flat-rate').addEventListener('click', function() {
-    var rate = document.getElementById('s-flat-rate').value;
-    if (rate) {
-        ['P1','P2','P3','P4','P5','P6'].forEach(function(p) {
-            document.getElementById('s-rate-' + p).value = rate;
-        });
-    }
-});
+function recoverData() {
+    const btn = document.getElementById('btn-recover');
+    const status = document.getElementById('recover-status');
+    const hours = parseInt(document.getElementById('recover-hours').value) || 48;
 
-// Auto-compute effective rate when discount or base rate changes
-function updateEffective() {
-    var base = parseFloat(document.getElementById('s-base-rate').value) || 0;
-    var disc = parseFloat(document.getElementById('s-discount').value) || 0;
-    var eff = base * (1 - disc / 100);
-    document.getElementById('s-flat-rate').value = eff.toFixed(6);
+    btn.disabled = true;
+    btn.textContent = 'Recuperant...';
+    status.style.display = 'block';
+    status.innerHTML = '<p style="color:var(--text-secondary)">Analitzant forats i recuperant dades del backup...</p>';
+
+    fetch('/api/recover-data', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({hours: hours})
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.error) {
+            status.innerHTML = '<p style="color:var(--danger)">' + data.error + '</p>';
+        } else {
+            let html = '<table class="data-table" style="width:100%"><thead><tr>' +
+                '<th>Mesura</th><th>Forats (h)</th><th>Rang</th><th>Punts recuperats</th><th>Estat</th>' +
+                '</tr></thead><tbody>';
+            for (const [meas, info] of Object.entries(data)) {
+                const ok = info.recovered > 0;
+                const noGap = info.gaps === 0;
+                let estat = noGap ? 'Cap forat' : (ok ? 'Recuperat' : (info.error || info.write_error || '-'));
+                let color = noGap ? 'var(--success)' : (ok ? 'var(--success)' : 'var(--danger)');
+                html += '<tr>' +
+                    '<td><strong>' + meas + '</strong></td>' +
+                    '<td>' + (info.gaps || 0) + '</td>' +
+                    '<td style="font-size:0.85em">' + (info.gap_range || '-') + '</td>' +
+                    '<td>' + (info.recovered || 0) + '</td>' +
+                    '<td style="color:' + color + '">' + estat + '</td>' +
+                    '</tr>';
+            }
+            html += '</tbody></table>';
+            status.innerHTML = html;
+        }
+    })
+    .catch(err => {
+        status.innerHTML = '<p style="color:var(--danger)">Error: ' + err.message + '</p>';
+    })
+    .finally(() => {
+        btn.disabled = false;
+        btn.textContent = 'Recuperar dades';
+    });
 }
-document.getElementById('s-base-rate').addEventListener('input', updateEffective);
-document.getElementById('s-discount').addEventListener('input', updateEffective);
 </script>
+
 {% endblock %}

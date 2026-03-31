@@ -27,6 +27,9 @@ STATUS_MAP = {
     5: "Error",
 }
 
+# Backup InfluxDB (Pi)
+BACKUP_INFLUXDB_URL = os.environ.get("BACKUP_INFLUXDB_URL", "")
+
 # Paths
 INVOICES_DIR = "/app/invoices"
 PRICING_PATH = "/app/pricing.json"

@@ -4,6 +4,7 @@ import time
 import logging
 import threading
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 import requests
 import schedule
@@ -23,10 +24,148 @@ KSEM_IP = os.environ.get("KSEM_IP", "")
 POLL_INTERVAL = int(os.environ.get("POLL_INTERVAL", 30))
 OMIE_ENABLED = os.environ.get("OMIE_ENABLED", "false").lower() == "true"
 OMIE_BACKFILL_DAYS = int(os.environ.get("OMIE_BACKFILL_DAYS", 30))
+
+# Telegram alerts
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
+ALERT_FAIL_THRESHOLD = int(os.environ.get("ALERT_FAIL_THRESHOLD", 10))
 INFLUXDB_URL = os.environ["INFLUXDB_URL"]
 INFLUXDB_TOKEN = os.environ["INFLUXDB_TOKEN"]
 INFLUXDB_ORG = os.environ["INFLUXDB_ORG"]
 INFLUXDB_BUCKET = os.environ["INFLUXDB_BUCKET"]
+
+# ---------------------------------------------------------------------------
+# Telegram alerts
+# ---------------------------------------------------------------------------
+
+TELEGRAM_API = "https://api.telegram.org/bot{token}/sendMessage"
+
+
+def send_telegram(message):
+    """Send a Telegram notification."""
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+        return False
+    try:
+        resp = requests.post(
+            TELEGRAM_API.format(token=TELEGRAM_BOT_TOKEN),
+            json={"chat_id": TELEGRAM_CHAT_ID, "text": message, "parse_mode": "HTML"},
+            timeout=10,
+        )
+        if resp.status_code == 200:
+            log.info("[Telegram] Alert sent")
+            return True
+        log.error("[Telegram] API error %d: %s", resp.status_code, resp.text)
+    except Exception as e:
+        log.error("[Telegram] Failed: %s", e)
+    return False
+
+
+class DeviceTracker:
+    """Track consecutive failures per device and send alerts on threshold / recovery."""
+
+    def __init__(self, threshold=ALERT_FAIL_THRESHOLD):
+        self.threshold = threshold
+        self.fail_counts = {}   # device -> consecutive failures
+        self.alerted = {}       # device -> True if alert already sent
+        self.was_online = {}    # device -> True if ever seen online
+
+    def _is_daytime(self):
+        """Check if it's daytime (7:00-22:00 CET) — inverter alerts only during day."""
+        hour = datetime.now(ZoneInfo("Europe/Madrid")).hour
+        return 7 <= hour < 22
+
+    def report_ok(self, device):
+        """Device polled successfully."""
+        was_down = self.alerted.get(device, False)
+        self.fail_counts[device] = 0
+        self.alerted[device] = False
+        self.was_online[device] = True
+        if was_down:
+            send_telegram(f"<b>RECUPERAT</b> {device}\nTorna a estar en línia.")
+
+    def report_fail(self, device, is_inverter=False):
+        """Device poll failed. Only alert for inverters during daytime."""
+        if is_inverter and not self._is_daytime():
+            return  # Normal for inverters to be offline at night
+        self.fail_counts[device] = self.fail_counts.get(device, 0) + 1
+        count = self.fail_counts[device]
+        if count >= self.threshold and not self.alerted.get(device, False):
+            minutes = count * POLL_INTERVAL // 60
+            send_telegram(
+                f"<b>ALERTA</b> {device}\n"
+                f"No respon des de fa ~{minutes} min ({count} intents fallits)."
+            )
+            self.alerted[device] = True
+
+
+tracker = DeviceTracker()
+
+
+def _daily_summary_thread(query_api):
+    """Send a daily production summary at 21:30 local time."""
+    MADRID_TZ = ZoneInfo("Europe/Madrid")
+
+    def send_summary():
+        now = datetime.now(MADRID_TZ)
+        if now.hour != 21 or now.minute < 25 or now.minute > 35:
+            return
+        try:
+            today_str = now.strftime("%Y-%m-%d")
+            offset = now.strftime("%z")  # e.g. "+0100" or "+0200"
+            offset_fmt = offset[:3] + ":" + offset[3:]  # "+01:00" or "+02:00"
+            flux = f'''
+                from(bucket: "{INFLUXDB_BUCKET}")
+                  |> range(start: {today_str}T00:00:00{offset_fmt}, stop: {today_str}T23:59:59{offset_fmt})
+                  |> filter(fn: (r) => r._measurement == "piko")
+                  |> filter(fn: (r) => r._field == "yield_daily")
+                  |> last()
+            '''
+            tables = query_api.query(flux)
+            total_kwh = 0.0
+            for table in tables:
+                for rec in table.records:
+                    total_kwh += rec.get_value() or 0.0
+
+            # Get import/export from KSEM
+            flux_ksem = f'''
+                from(bucket: "{INFLUXDB_BUCKET}")
+                  |> range(start: {today_str}T00:00:00{offset_fmt}, stop: {today_str}T23:59:59{offset_fmt})
+                  |> filter(fn: (r) => r._measurement == "ksem")
+                  |> filter(fn: (r) => r._field == "active_power_total")
+                  |> aggregateWindow(every: 30s, fn: mean, createEmpty: false)
+            '''
+            tables_ksem = query_api.query(flux_ksem)
+            import_kwh = 0.0
+            export_kwh = 0.0
+            for table in tables_ksem:
+                for rec in table.records:
+                    val = rec.get_value() or 0.0
+                    # W * 30s / 3600 / 1000 = kWh per 30s interval
+                    energy = abs(val) * 30 / 3_600_000
+                    if val < 0:
+                        import_kwh += energy
+                    else:
+                        export_kwh += energy
+
+            lines = [
+                f"<b>RESUM DIARI</b> — {today_str}",
+                f"Producció: <b>{total_kwh:.1f} kWh</b>",
+                f"Exportació: {export_kwh:.1f} kWh",
+                f"Importació: {import_kwh:.1f} kWh",
+            ]
+            if total_kwh > 0:
+                autoconsum = max(0, total_kwh - export_kwh)
+                pct = autoconsum / total_kwh * 100
+                lines.append(f"Autoconsum: {autoconsum:.1f} kWh ({pct:.0f}%)")
+
+            send_telegram("\n".join(lines))
+        except Exception as e:
+            log.error("[Daily summary] Error: %s", e)
+
+    while True:
+        send_summary()
+        time.sleep(300)  # Check every 5 minutes
+
 
 # ---------------------------------------------------------------------------
 # PIKO 15 — HTTP / dxs.json
@@ -92,7 +231,7 @@ def poll_piko15():
 
         for entry in data.get("dxsEntries", []):
             dxs_id = entry["dxsId"]
-            if dxs_id in DXS_FIELDS:
+            if dxs_id in DXS_FIELDS and entry["value"] is not None:
                 field_name, cast = DXS_FIELDS[dxs_id]
                 point = point.field(field_name, cast(entry["value"]))
 
@@ -307,15 +446,14 @@ def poll_ksem():
 # OMIE — Day-ahead market prices
 # ---------------------------------------------------------------------------
 
-CET = timezone(timedelta(hours=1))
-CEST = timezone(timedelta(hours=2))
+MADRID_TZ = ZoneInfo("Europe/Madrid")
 
 OMIE_URL = "https://www.omie.es/es/file-download?parents%5B0%5D=marginalpdbc&filename=marginalpdbc_{date}.1"
 
 
 def _cet_now():
-    """Current time in CET/CEST (simplified: use CET year-round for OMIE alignment)."""
-    return datetime.now(CET)
+    """Current time in Europe/Madrid (CET/CEST with DST)."""
+    return datetime.now(MADRID_TZ)
 
 
 def _parse_omie_file(text, target_date):
@@ -337,7 +475,7 @@ def _parse_omie_file(text, target_date):
             continue
         # Period 1 = 00:00-00:15, Period 2 = 00:15-00:30, etc.
         minutes = (period - 1) * 15
-        ts = datetime(year, month, day, minutes // 60, minutes % 60, tzinfo=CET)
+        ts = datetime(year, month, day, minutes // 60, minutes % 60, tzinfo=MADRID_TZ)
         prices.append((ts, price_spain))
     return prices
 
@@ -406,7 +544,7 @@ def _omie_backfill(write_api, query_api):
             for rec in table.records:
                 t = rec.get_time()
                 if t is not None:
-                    existing_dates.add(t.astimezone(CET).date())
+                    existing_dates.add(t.astimezone(MADRID_TZ).date())
     except Exception:
         log.exception("OMIE backfill: failed to query existing dates")
         return
@@ -466,6 +604,173 @@ def _omie_backfill(write_api, query_api):
     log.info("OMIE backfill: completed, filled %d/%d missing dates", filled, len(missing))
 
 
+# ---------------------------------------------------------------------------
+# National Weather — Open-Meteo forecasts for renewable energy regions
+# ---------------------------------------------------------------------------
+
+WEATHER_REGIONS = {
+    "andalucia":          {"lat": 37.38, "lon": -5.98},
+    "castilla_la_mancha": {"lat": 39.47, "lon": -3.00},
+    "extremadura":        {"lat": 39.47, "lon": -6.37},
+    "murcia":             {"lat": 37.98, "lon": -1.13},
+    "aragon":             {"lat": 41.65, "lon": -0.88},
+    "galicia":            {"lat": 42.88, "lon": -8.54},
+}
+
+OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast"
+
+
+def fetch_national_weather(write_api):
+    """Fetch solar irradiance and wind speed forecasts for key Spanish regions."""
+    total_points = 0
+    for region, coords in WEATHER_REGIONS.items():
+        try:
+            resp = requests.get(
+                OPEN_METEO_URL,
+                params={
+                    "latitude": coords["lat"],
+                    "longitude": coords["lon"],
+                    "hourly": "global_tilted_irradiance,wind_speed_120m",
+                    "tilt": 30,
+                    "azimuth": 0,
+                    "timezone": "Europe/Madrid",
+                    "forecast_days": 3,
+                },
+                timeout=30,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+        except requests.RequestException as e:
+            log.warning("[NatWeather] Failed to fetch %s: %s", region, e)
+            continue
+
+        hourly = data.get("hourly", {})
+        times = hourly.get("time", [])
+        gti_values = hourly.get("global_tilted_irradiance", [])
+        wind_values = hourly.get("wind_speed_120m", [])
+
+        if not times:
+            log.warning("[NatWeather] No hourly data for %s", region)
+            continue
+
+        points = []
+        for i, time_str in enumerate(times):
+            # time_str is like "2026-03-07T00:00" in Europe/Madrid
+            try:
+                ts = datetime.strptime(time_str, "%Y-%m-%dT%H:%M").replace(tzinfo=MADRID_TZ)
+            except ValueError:
+                continue
+
+            gti = gti_values[i] if i < len(gti_values) and gti_values[i] is not None else 0.0
+            wind = wind_values[i] if i < len(wind_values) and wind_values[i] is not None else 0.0
+
+            point = (
+                Point("national_weather")
+                .tag("region", region)
+                .time(ts)
+                .field("gti_wm2", float(gti))
+                .field("wind_speed_ms", float(wind))
+            )
+            points.append(point)
+
+        if points:
+            try:
+                write_api.write(bucket=INFLUXDB_BUCKET, record=points)
+                log.info("[NatWeather] Wrote %d points for region %s", len(points), region)
+                total_points += len(points)
+            except Exception:
+                log.exception("[NatWeather] Failed to write points for %s", region)
+
+        # Small delay between regions to be polite to the API
+        time.sleep(1)
+
+    return total_points
+
+
+def fetch_local_irradiance(write_api):
+    """Fetch and store local site solar irradiance forecast for long-term analysis.
+
+    Stores hourly GTI (global tilted irradiance) and estimated PV output
+    for L'Escala site (42.12°N, 3.13°E, 30° tilt, south-facing, 65 kWp).
+    """
+    lat, lon = 42.12, 3.13
+    kwp, tilt, azimuth, efficiency = 65.0, 30, 0, 0.80
+
+    try:
+        resp = requests.get(
+            OPEN_METEO_URL,
+            params={
+                "latitude": lat, "longitude": lon,
+                "hourly": "global_tilted_irradiance,temperature_2m,cloud_cover",
+                "tilt": tilt, "azimuth": azimuth,
+                "timezone": "Europe/Madrid",
+                "forecast_days": 3,
+            },
+            timeout=30,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+    except requests.RequestException as e:
+        log.warning("[LocalIrr] Failed to fetch: %s", e)
+        return 0
+
+    hourly = data.get("hourly", {})
+    times = hourly.get("time", [])
+    gti_vals = hourly.get("global_tilted_irradiance", [])
+    temp_vals = hourly.get("temperature_2m", [])
+    cloud_vals = hourly.get("cloud_cover", [])
+
+    points = []
+    for i, t_str in enumerate(times):
+        try:
+            ts = datetime.strptime(t_str, "%Y-%m-%dT%H:%M").replace(tzinfo=MADRID_TZ)
+        except ValueError:
+            continue
+
+        gti = gti_vals[i] if i < len(gti_vals) and gti_vals[i] is not None else 0.0
+        temp = temp_vals[i] if i < len(temp_vals) and temp_vals[i] is not None else 0.0
+        cloud = cloud_vals[i] if i < len(cloud_vals) and cloud_vals[i] is not None else 0.0
+        pv_kw = gti * kwp * efficiency / 1000.0  # estimated output in kW
+
+        point = (
+            Point("local_irradiance")
+            .time(ts)
+            .field("gti_wm2", float(gti))
+            .field("pv_estimated_kw", round(pv_kw, 2))
+            .field("temperature_c", float(temp))
+            .field("cloud_cover_pct", float(cloud))
+        )
+        points.append(point)
+
+    if points:
+        try:
+            write_api.write(bucket=INFLUXDB_BUCKET, record=points)
+            log.info("[LocalIrr] Wrote %d points (3-day forecast)", len(points))
+        except Exception:
+            log.exception("[LocalIrr] Failed to write")
+
+    return len(points)
+
+
+def _national_weather_thread(write_api):
+    """Background thread: fetch weather forecasts on startup, then every 6 hours."""
+    log.info("[NatWeather] Thread started")
+
+    # Initial fetch
+    try:
+        fetch_national_weather(write_api)
+        fetch_local_irradiance(write_api)
+    except Exception:
+        log.exception("[NatWeather] Error on initial fetch")
+
+    schedule.every(6).hours.do(fetch_national_weather, write_api)
+    schedule.every(6).hours.do(fetch_local_irradiance, write_api)
+
+    while True:
+        schedule.run_pending()
+        time.sleep(60)
+
+
 def _omie_thread(write_api, query_api):
     """Background thread: backfill gaps, fetch today+tomorrow, then hourly."""
     log.info("OMIE thread started")
@@ -505,16 +810,33 @@ def main():
     else:
         log.info("OMIE price collector disabled (set OMIE_ENABLED=true to enable)")
 
+    # Start national weather thread
+    weather = threading.Thread(target=_national_weather_thread, args=(write_api,), daemon=True)
+    weather.start()
+    log.info("National weather collector enabled (6h interval, %d regions)", len(WEATHER_REGIONS))
+
+    # Start daily summary thread
+    if TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID:
+        summary = threading.Thread(target=_daily_summary_thread, args=(query_api,), daemon=True)
+        summary.start()
+        log.info("Telegram alerts enabled (threshold: %d failures)", ALERT_FAIL_THRESHOLD)
+        send_telegram("<b>COLLECTOR INICIAT</b>\nEl col·lector de dades s'ha engegat.")
+    else:
+        log.info("Telegram alerts disabled (set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID)")
+
     while True:
         # --- PIKO 15 ---
         try:
             point = poll_piko15()
             write_api.write(bucket=INFLUXDB_BUCKET, record=point)
             log.info("PIKO 15 data written")
+            tracker.report_ok("PIKO 15")
         except requests.exceptions.ConnectionError:
             log.debug("PIKO 15 unreachable (likely night time)")
+            tracker.report_fail("PIKO 15", is_inverter=True)
         except Exception:
             log.exception("Error polling PIKO 15")
+            tracker.report_fail("PIKO 15", is_inverter=True)
 
         # --- PIKO CI 50 ---
         if INVERTER_CI_IP:
@@ -523,10 +845,13 @@ def main():
                 if point is not None:
                     write_api.write(bucket=INFLUXDB_BUCKET, record=point)
                     log.info("PIKO CI data written")
+                    tracker.report_ok("PIKO CI 50")
                 else:
                     log.debug("PIKO CI 50 unreachable (likely night time)")
+                    tracker.report_fail("PIKO CI 50", is_inverter=True)
             except Exception:
                 log.exception("Error polling PIKO CI 50")
+                tracker.report_fail("PIKO CI 50", is_inverter=True)
 
         # --- KSEM ---
         if KSEM_IP:
@@ -535,10 +860,13 @@ def main():
                 if point is not None:
                     write_api.write(bucket=INFLUXDB_BUCKET, record=point)
                     log.info("KSEM data written")
+                    tracker.report_ok("KSEM")
                 else:
                     log.debug("KSEM unreachable")
+                    tracker.report_fail("KSEM", is_inverter=False)
             except Exception:
                 log.exception("Error polling KSEM")
+                tracker.report_fail("KSEM", is_inverter=False)
 
         time.sleep(POLL_INTERVAL)
 

@@ -68,6 +68,9 @@ services:
       - POLL_INTERVAL=${POLL_INTERVAL}
       - OMIE_ENABLED=${OMIE_ENABLED}
       - OMIE_BACKFILL_DAYS=${OMIE_BACKFILL_DAYS:-30}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+      - ALERT_FAIL_THRESHOLD=${ALERT_FAIL_THRESHOLD:-10}
       - INFLUXDB_URL=http://influxdb:8086
       - INFLUXDB_TOKEN=${INFLUXDB_TOKEN}
       - INFLUXDB_ORG=${INFLUXDB_ORG}
@@ -89,6 +92,7 @@ services:
       - ELECTRICITY_COST=${ELECTRICITY_COST}
       - INJECTION_PRICE=${INJECTION_PRICE}
       - CO2_FACTOR=${CO2_FACTOR}
+      - BACKUP_INFLUXDB_URL=${BACKUP_INFLUXDB_URL:-}
     volumes:
       - ./pricing.json:/app/pricing.json
       - ./offers.json:/app/offers.json
