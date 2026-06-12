@@ -5437,7 +5437,8 @@ def recover_data_from_backup(lookback_hours=48):
             f" |> aggregateWindow(every: 1h, fn: count)"
             f" |> yield()"
         )
-        resp = requests.post(local_query_url, headers=headers, data=count_query)
+        resp = requests.post(local_query_url, headers=headers, data=count_query,
+                             timeout=15)
         local_hours = set()
         if resp.status_code == 200 and resp.text.strip():
             for line in resp.text.strip().split("\r\n"):
