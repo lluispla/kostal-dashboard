@@ -1014,10 +1014,19 @@ def get_solar_forecast():
     times = m15.get("time", [])
     gti = m15.get("global_tilted_irradiance", [])
 
-    # Convert GTI (W/m²) to expected plant power (W)
-    # Rough conversion: P = GTI * kWp * efficiency / 1000
-    # Using 0.80 system efficiency (panel + inverter + wiring losses)
-    efficiency = 0.80
+    # Convert GTI (W/m²) to expected plant power (W).
+    # P = GTI * kWp * eff(GTI) — efficiency is irradiance-dependent (see
+    # _conversion_efficiency): rated 0.80 above 500 W/m², derated below to
+    # capture inverter part-load curve + AOI + morning horizon shading.
+
+    # Scale to inverters that are actually producing, not full nameplate —
+    # otherwise an offline inverter makes the forecast look permanently missed.
+    online_kwp = _online_solar_kwp()
+    if online_kwp < _SOLAR_KWP:
+        # warning (not info) so it surfaces under the default WARNING root level —
+        # only fires when an inverter is actually offline, so it is not noise.
+        _log.warning("Solar forecast scaled to %.0f kWp of %.0f (inverter(s) offline)",
+                     online_kwp, _SOLAR_KWP)
 
     today_str = now.strftime("%Y-%m-%d")
     tomorrow_str = (now + timedelta(days=1)).strftime("%Y-%m-%d")
@@ -1033,8 +1042,8 @@ def get_solar_forecast():
     for t_str, irr in zip(times, gti):
         if irr is None or irr <= 0:
             continue
-        # Power in watts: P = GTI/STC * kWp * eff * 1000
-        power_w = round(irr * _SOLAR_KWP * efficiency, 0)
+        # Power in watts: P = GTI/STC * kWp * eff(GTI) * 1000
+        power_w = round(irr * online_kwp * _conversion_efficiency(irr), 0)
         # Convert to ISO with timezone for Chart.js
         dt = datetime.fromisoformat(t_str)
         iso = dt.isoformat()
@@ -1125,6 +1134,10 @@ def get_previsio_solar_data():
     #    We use the current month's factor as a proxy for a "typical" day estimate.
     daily_forecast = []
     accuracy_values = []
+    # Scale the "expected" estimate to the operational plant too, so accuracy
+    # is not dragged down just because an inverter is offline (see
+    # _online_solar_kwp). Past days are approximated with the current online set.
+    online_kwp = _online_solar_kwp()
     for pt in daily_actual:
         try:
             day_dt = datetime.fromisoformat(pt["x"])
@@ -1134,7 +1147,7 @@ def get_previsio_solar_data():
             factor = 1.0
         # Expected daily kWh using Mediterranean annual yield ~1500 kWh/kWp
         # daily_avg = 1500 * kWp / 365 * month_factor
-        estimated_kwh = round(1500.0 * _SOLAR_KWP / 365.0 * factor, 1)
+        estimated_kwh = round(1500.0 * online_kwp / 365.0 * factor, 1)
 
         daily_forecast.append({"x": pt["x"], "y": estimated_kwh})
         if estimated_kwh > 0 and pt["y"] > 0:
