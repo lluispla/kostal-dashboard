@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title %}Model de Consum{% endblock %}
+
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<style>
+.heatmap { border-collapse: collapse; font-size: 0.75rem; }
+.heatmap th, .heatmap td { border: 1px solid var(--border); padding: 4px 6px; text-align: center; }
+.heatmap th { background: var(--surface); font-weight: 600; }
+.heatmap td.hm-cell { min-width: 34px; font-variant-numeric: tabular-nums; }
+.heatmap td.hm-na { color: var(--muted); background: repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(0,0,0,0.04) 3px, rgba(0,0,0,0.04) 6px); }
+.event-table td { font-variant-numeric: tabular-nums; }
+</style>
+{% endblock %}
+
+{% block content %}
+<h1>&#128200; Model de Consum</h1>
+<p class="section-help">
+    Deriva el consum base (sense impressores) a partir del KSEM + PIKO, detecta quantes impressores estan en marxa
+    a cada interval de 15&nbsp;min i prediu el consum base per qualsevol hora futura. Alimenta el
+    <a href="{{ url_for('programador') }}">Programador</a> per calcular la capacitat solar sobrant per a noves c&agrave;rregues.
+</p>
+
+<!-- Stats KPIs -->
+<div class="kpi-row" id="model-kpis">
+    <div class="kpi-card">
+        <div class="label">Dies modelats</div>
+        <div class="value val-blue"><span id="kpi-days">--</span></div>
+        <div style="font-size:0.8rem; color:var(--muted);"><span id="kpi-range">--</span></div>
+    </div>
+    <div class="kpi-card">
+        <div class="label">Files hist&ograve;riques</div>
+        <div class="value val-blue"><span id="kpi-rows">--</span></div>
+        <div style="font-size:0.8rem; color:var(--muted);">24 / dia</div>
+    </div>
+    <div class="kpi-card">
+        <div class="label">Pic impressores simult&agrave;nies (30d)</div>
+        <div class="value val-yellow"><span id="kpi-peak">--</span></div>
+    </div>
+    <div class="kpi-card">
+        <div class="label">Consum base mitj&agrave; (lab. 09-18)</div>
+        <div class="value val-green"><span id="kpi-avg-base">--</span><span class="unit">kW</span></div>
+    </div>
+</div>
+
+<!-- Heatmap -->
+<div class="section">
+    <h3>Consum base mitj&agrave; per dia de la setmana &times; hora</h3>
+    <p class="section-help">Mediana de kW base per a cada cel&middot;la; el color va de verd (baix) a vermell (alt). Cel&middot;les ratllades: sense dades encara.</p>
+    <div id="heatmap-loading" style="color:var(--muted);">Carregant...</div>
+    <div style="overflow-x:auto;">
+        <table class="heatmap" id="heatmap-table" hidden>
+            <thead><tr id="heatmap-header"></tr></thead>
+            <tbody id="heatmap-body"></tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Timeline -->
+<div class="section">
+    <h3>Activitat diaria (30 dies)</h3>
+    <div class="chart-wrap" style="height:260px;">
+        <canvas id="chart-timeline"></canvas>
+    </div>
+</div>
+
+<!-- Day inspector -->
+<div class="section">
+    <h3>Inspeccionar un dia concret</h3>
+    <div style="display:flex; gap:0.75rem; align-items:flex-end; flex-wrap:wrap; margin-bottom:1rem;">
+        <div>
+            <label for="day-date" style="display:block; font-size:0.8rem; color:var(--muted);">Data</label>
+            <input type="date" id="day-date" style="padding:0.5rem; border:1px solid var(--border); border-radius:6px;">
+        </div>
+        <button id="day-load" type="button" style="padding:0.55rem 1.25rem; background:var(--green); color:white; border:none; border-radius:6px; cursor:pointer;">
+            Carregar
+        </button>
+        <span id="day-status" style="color:var(--muted); font-size:0.85rem;"></span>
+    </div>
+    <div id="day-result" hidden>
+        <div class="kpi-row" style="margin-bottom:1rem;">
+            <div class="kpi-card"><div class="label">Proxy base nit</div><div class="value"><span id="day-proxy">--</span><span class="unit">kW</span></div></div>
+            <div class="kpi-card"><div class="label">Consum total</div><div class="value"><span id="day-load">--</span><span class="unit">kWh</span></div></div>
+            <div class="kpi-card"><div class="label">Consum base</div><div class="value val-green"><span id="day-base">--</span><span class="unit">kWh</span></div></div>
+            <div class="kpi-card"><div class="label">Impressores</div><div class="value val-yellow"><span id="day-printer">--</span><span class="unit">kWh</span></div></div>
+        </div>
+        <div class="chart-wrap" style="height:320px;">
+            <canvas id="chart-day"></canvas>
+        </div>
+        <h4 style="margin-top:1.5rem;">Esdeveniments detectats</h4>
+        <div style="overflow-x:auto;">
+            <table class="data-table event-table" id="day-events">
+                <thead><tr><th>Hora</th><th>Tipus</th><th>&Delta; impressores</th><th>C&agrave;rrega al bin (kW)</th></tr></thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Backfill controls -->
+<div class="section" style="background:var(--surface); padding:1rem;">
+    <h3>Manteniment</h3>
+    <p style="font-size:0.85rem; color:var(--muted);">
+        El model s'actualitza autom&agrave;ticament cada dia a les 03:00 CET. Si cal reprocessar un rang (p.&nbsp;ex., despr&eacute;s de recuperar dades), fes servir aquest bot&oacute;:
+    </p>
+    <div style="display:flex; gap:0.75rem; align-items:flex-end; flex-wrap:wrap;">
+        <div><label style="display:block; font-size:0.8rem; color:var(--muted);">Des de</label>
+            <input type="date" id="bf-start" style="padding:0.5rem; border:1px solid var(--border); border-radius:6px;"></div>
+        <div><label style="display:block; font-size:0.8rem; color:var(--muted);">Fins a</label>
+            <input type="date" id="bf-end" style="padding:0.5rem; border:1px solid var(--border); border-radius:6px;"></div>
+        <button id="bf-run" type="button" style="padding:0.55rem 1rem; background:#0C4DA2; color:white; border:none; border-radius:6px; cursor:pointer;">
+            Reprocessar
+        </button>
+        <span id="bf-status" style="color:var(--muted); font-size:0.85rem;"></span>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/consum_model.js') }}"></script>
+{% endblock %}

@@ -330,12 +330,105 @@ def api_optimitzador():
     return jsonify(get_optimizer_data())
 
 
-@app.route("/api/optimitzador/recommend")
-def api_optimitzador_recommend():
-    import sys
-    sys.path.insert(0, "/app/tools")
-    from mjf_recommend import get_recommendation
-    return jsonify(get_recommendation())
+# ---------------------------------------------------------------------------
+# Load Scheduler
+# ---------------------------------------------------------------------------
+
+@app.route("/programador")
+def programador():
+    return render_template("programador.html")
+
+
+@app.route("/api/programador")
+def api_programador():
+    from scheduler import get_scheduler_data
+    try:
+        load_kw = float(request.args.get("load_kw", 5.0))
+        duration_h = int(request.args.get("duration_h", 4))
+        lookahead_h = int(request.args.get("lookahead_h", 48))
+        use_forecast = request.args.get("use_forecast", "1") not in ("0", "false")
+        use_baseline = request.args.get("use_baseline", "1") not in ("0", "false")
+    except (TypeError, ValueError):
+        return jsonify({"error": "Invalid parameters"}), 400
+    try:
+        return jsonify(get_scheduler_data(
+            load_kw, duration_h, lookahead_h,
+            use_forecast=use_forecast, use_baseline=use_baseline,
+        ))
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+
+
+# ---------------------------------------------------------------------------
+# Consumption model (baseline profiles from history)
+# ---------------------------------------------------------------------------
+
+@app.route("/api/consumption-model/stats")
+def api_consumption_stats():
+    from consumption_model import get_model_stats
+    return jsonify(get_model_stats())
+
+
+@app.route("/api/consumption-model/backfill", methods=["POST"])
+def api_consumption_backfill():
+    from consumption_model import backfill_profiles
+    from datetime import date, datetime as _dt, timedelta
+    payload = request.get_json(silent=True) or {}
+    try:
+        start = _dt.strptime(payload.get("start", ""), "%Y-%m-%d").date() \
+            if payload.get("start") else date.today() - timedelta(days=60)
+        end = _dt.strptime(payload.get("end", ""), "%Y-%m-%d").date() \
+            if payload.get("end") else date.today() - timedelta(days=1)
+    except ValueError:
+        return jsonify({"error": "Invalid date format, use YYYY-MM-DD"}), 400
+    result = backfill_profiles(start, end)
+    return jsonify({"start": start.isoformat(), "end": end.isoformat(), **result})
+
+
+@app.route("/api/consumption-model/day/<date_str>")
+def api_consumption_day(date_str):
+    from consumption_model import build_daily_profile
+    from datetime import datetime as _dt
+    try:
+        d = _dt.strptime(date_str, "%Y-%m-%d").date()
+    except ValueError:
+        return jsonify({"error": "Invalid date format, use YYYY-MM-DD"}), 400
+    prof = build_daily_profile(d)
+    if prof is None:
+        return jsonify({"error": "No data for this date"}), 404
+    return jsonify(prof)
+
+
+@app.route("/consum-model")
+def consum_model():
+    return render_template("consum_model.html")
+
+
+@app.route("/api/consumption-model/heatmap")
+def api_consumption_heatmap():
+    from consumption_model import get_weekly_heatmap
+    return jsonify(get_weekly_heatmap())
+
+
+@app.route("/api/consumption-model/timeline")
+def api_consumption_timeline():
+    from consumption_model import get_concurrent_timeline
+    days = int(request.args.get("days", 30))
+    return jsonify(get_concurrent_timeline(days=days))
+
+
+@app.route("/api/consumption-model/predict")
+def api_consumption_predict():
+    from consumption_model import predict_baseline
+    from datetime import datetime as _dt
+    ts = request.args.get("ts")
+    if not ts:
+        return jsonify({"error": "ts query parameter required (ISO8601)"}), 400
+    try:
+        dt = _dt.fromisoformat(ts)
+    except ValueError:
+        return jsonify({"error": "Invalid ISO8601 timestamp"}), 400
+    return jsonify(predict_baseline(dt))
 
 
 # ---------------------------------------------------------------------------
@@ -505,4 +598,10 @@ def api_recover_data():
 
 
 if __name__ == "__main__":
+    try:
+        from consumption_model import start_daily_thread
+        start_daily_thread()
+    except Exception:
+        import logging
+        logging.exception("Failed to start consumption_model daily thread")
     app.run(host="0.0.0.0", port=5000, debug=False)
