@@ -757,6 +757,219 @@ _FORECAST_CACHE_TTL = timedelta(hours=1)
 
 _log = logging.getLogger(__name__)
 
+# Nameplate AC capacity per inverter tag — used to scale the solar forecast to
+# whichever inverters are actually operational (see _online_solar_kwp).
+_INVERTER_RATED_W = {
+    "piko_15": PIKO_15_RATED_W,
+    "piko_ci_50": PIKO_CI_50_RATED_W,
+}
+
+# Number of DC string/MPPT inputs per inverter — used by _inverter_strings()
+# to surface per-string health on the dashboard. PIKO 15 has 3, CI 50 has 4.
+_INVERTER_STRING_COUNT = {
+    "piko_15": 3,
+    "piko_ci_50": 4,
+}
+
+
+def _classify_string_state(v, w, peak_24h_v, peak_24h_w):
+    """Classify a single DC string's state from a recent snapshot + 24h peaks.
+
+    The 24h peaks (voltage AND power) are what separate chronic states from
+    transient ones — a healthy string at night reads 0 V / 0 W right now but
+    its peaks are still high from earlier daylight, while a truly broken
+    string keeps its peaks at zero across the day. Returns
+    (state_id, badge_class, label_ca, tooltip_ca).
+    """
+    # Open input — no voltage ever seen in last 24h: no panels reach this
+    # MPPT, or the string is open at the array side.
+    if peak_24h_v < 50 and peak_24h_w < 50:
+        return ("unconnected", "status-off", "Desconnectada",
+                "Sense tensió DC en 24 h. Cap panell connectat a aquesta "
+                "entrada, o cablejat obert a l'array.")
+    # Voltage seen but never carries current — chronic fault in the current
+    # path. This catches the string-3 pattern regardless of time of day.
+    if peak_24h_v >= 50 and peak_24h_w < 100:
+        return ("fault", "status-error", "Sense corrent",
+                "Tensió DC present però 0 A i 0 W de pic en 24 h. "
+                "Probable: fusible de string obert/no instal·lat, isolador "
+                "DC obert, connector MC4 defectuós, o l'entrada MPPT no "
+                "està activada a la configuració de l'inversor.")
+    # Currently producing.
+    if w >= 50:
+        return ("ok", "status-ok", "Produint", "Producció normal")
+    # Had a healthy peak in last 24h but is currently low — night, low sun
+    # or temporary clouds. Healthy, just not generating right now.
+    return ("idle", "status-idle", "Baixa llum",
+            "Pic recent normal — actualment baixa irradiància (nit o núvols).")
+
+
+def _strings_summary(inverters):
+    """Aggregate per-string problem counts across inverters for the one-line
+    banner shown in the inverters section header.
+
+    Only chronic states ('fault' and 'unconnected') are counted — 'idle' is
+    just nighttime/low-light on a healthy string and shouldn't trigger a
+    warning. Returns counts, a boolean flag, and a Catalan label ready for
+    direct rendering (empty string when everything is fine).
+    """
+    n_fault = 0
+    n_unconn = 0
+    for inv in inverters:
+        for s in (inv.get("strings") or []):
+            if s["state"] == "fault":
+                n_fault += 1
+            elif s["state"] == "unconnected":
+                n_unconn += 1
+
+    parts = []
+    if n_fault:
+        noun = "string" if n_fault == 1 else "strings"
+        parts.append(f"{n_fault} {noun} sense corrent")
+    if n_unconn:
+        # User-preferred wording: feminine form ("desconnectada/-es") since
+        # the discussion treats strings as feminine in Catalan.
+        word = "desconnectada" if n_unconn == 1 else "desconnectades"
+        # Repeat "string(s)" only if there was no fault clause, to avoid
+        # "1 string sense corrent, 1 string desconnectada" verbosity.
+        prefix = f"{n_unconn}" if n_fault else f"{n_unconn} string{'s' if n_unconn > 1 else ''}"
+        parts.append(f"{prefix} {word}")
+
+    return {
+        "faults": n_fault,
+        "unconnected": n_unconn,
+        "has_problems": bool(parts),
+        "label": ("⚠ " + ", ".join(parts)) if parts else "",
+    }
+
+
+def _inverter_strings(tag, n_strings):
+    """Return per-string state dicts for inverter `tag` (3–4 strings).
+
+    Fetches last V/A/W + 24h max V/W per string in two batched Flux queries
+    (regex on _field), so the cost is constant per inverter regardless of
+    string count. Both peaks are needed: peak voltage tells us a string is
+    physically connected; peak power tells us current actually flows. A
+    chronic fault (V seen, W never) shows peak_V high + peak_W zero.
+    """
+    bucket = INFLUXDB_BUCKET
+    # Last value of every DC-string field in the last 5 min.
+    last_vals = {}
+    for table in _q(f'''
+        from(bucket: "{bucket}")
+          |> range(start: -5m)
+          |> filter(fn: (r) => r._measurement == "piko" and r.inverter == "{tag}")
+          |> filter(fn: (r) => r._field =~ /^dc_(voltage|current|power)_string[1-{n_strings}]$/)
+          |> last()
+          |> keep(columns: ["_field", "_value"])
+    '''):
+        for rec in table.records:
+            last_vals[rec.values.get("_field")] = rec.get_value()
+
+    # 24h peak voltage AND power per string — both signals are needed to
+    # separate chronic states (connected-but-faulted vs unconnected) from
+    # the transient "currently in the dark" state of a healthy string.
+    peak_v = {}
+    peak_w = {}
+    for table in _q(f'''
+        from(bucket: "{bucket}")
+          |> range(start: -24h)
+          |> filter(fn: (r) => r._measurement == "piko" and r.inverter == "{tag}")
+          |> filter(fn: (r) => r._field =~ /^dc_(voltage|power)_string[1-{n_strings}]$/)
+          |> max()
+          |> keep(columns: ["_field", "_value"])
+    '''):
+        for rec in table.records:
+            field = rec.values.get("_field") or ""
+            try:
+                idx = int(field[-1])
+            except ValueError:
+                continue
+            target = peak_v if field.startswith("dc_voltage_") else peak_w
+            target[idx] = rec.get_value() or 0.0
+
+    out = []
+    for i in range(1, n_strings + 1):
+        v = float(last_vals.get(f"dc_voltage_string{i}") or 0.0)
+        a = float(last_vals.get(f"dc_current_string{i}") or 0.0)
+        w = float(last_vals.get(f"dc_power_string{i}") or 0.0)
+        pv = float(peak_v.get(i) or 0.0)
+        pw = float(peak_w.get(i) or 0.0)
+        state, badge_class, label, tooltip = _classify_string_state(v, w, pv, pw)
+        out.append({
+            "id": i,
+            "voltage_v": round(v, 0),
+            "current_a": round(a, 2),
+            "power_w": round(w, 0),
+            "peak_24h_v": round(pv, 0),
+            "peak_24h_w": round(pw, 0),
+            "state": state,
+            "state_class": badge_class,
+            "state_label": label,
+            "state_tooltip": tooltip,
+        })
+    return out
+
+
+def _online_solar_kwp(threshold_w=100.0):
+    """Summed kWp of inverters that actually produced power in the last 24h.
+
+    Why: the Open-Meteo forecast is a single irradiance→power scaling by total
+    plant kWp. When an inverter is silently offline (e.g. PIKO 15's latched Riso
+    fault since 2026-05-16) the full-plant 65 kWp makes the predicted curve sit
+    ~40-50% above what the crippled plant can produce — it reads as a permanent
+    "disruption" on the dashboard. Counting only inverters that produced in the
+    last 24h keeps the forecast comparable to reality, and a repaired inverter
+    is folded back in automatically once it produces again.
+
+    A 24h window with max() (not a -5m "now" snapshot) is used so a healthy
+    inverter is not mistaken for offline at night when it legitimately reads 0.
+    Falls back to full nameplate (_SOLAR_KWP) if the query returns nothing
+    (e.g. a fresh start with no daytime data yet) so the forecast is never
+    flattened to zero.
+    """
+    online_w = 0.0
+    for table in _q(f'''
+        from(bucket: "{INFLUXDB_BUCKET}")
+          |> range(start: -24h)
+          |> filter(fn: (r) => r._measurement == "piko" and r._field == "ac_power_total")
+          |> filter(fn: (r) => exists r.inverter)
+          |> max()
+    '''):
+        for rec in table.records:
+            tag = rec.values.get("inverter")
+            peak = rec.get_value() or 0.0
+            if tag in _INVERTER_RATED_W and peak > threshold_w:
+                online_w += _INVERTER_RATED_W[tag]
+    return online_w / 1000.0 if online_w > 0 else _SOLAR_KWP
+
+
+# Effective GTI→AC efficiency parameters. The plant doesn't reach the rated
+# efficiency at low light: inverters have a part-load efficiency curve, optical
+# AOI/cosine losses grow at low sun angles, and Open-Meteo's flat-horizon GTI
+# doesn't see local east-side morning shading. We fold all three into one soft
+# saturation. Parameters fitted against measured plant data on 2026-05-27
+# (both inverters online) — RMSE 0.026 across 6 daylight hours:
+#   GTI  31 W/m² → measured 0.25, model 0.26
+#   GTI 127 W/m² → measured 0.51, model 0.46
+#   GTI 302 W/m² → measured 0.62, model 0.65
+#   GTI ≥500 W/m² → 0.80 (rated, unchanged — clear-noon forecast intact)
+_RATED_EFFICIENCY = 0.80
+_LOW_LIGHT_KNEE = 500.0   # W/m² above which the rated efficiency holds
+_LOW_LIGHT_EXP = 0.40     # shape of the sub-knee derating (smaller → steeper rise)
+
+
+def _conversion_efficiency(irr_w_m2):
+    """Effective GTI→AC plant efficiency at a given irradiance.
+
+    Replaces the old constant 0.80 to correct early-morning/late-evening
+    over-prediction. Saturates to _RATED_EFFICIENCY above _LOW_LIGHT_KNEE,
+    so clear-noon forecasts are unchanged.
+    """
+    if irr_w_m2 <= 0:
+        return 0.0
+    return _RATED_EFFICIENCY * min(1.0, irr_w_m2 / _LOW_LIGHT_KNEE) ** _LOW_LIGHT_EXP
+
 
 def get_solar_forecast():
     """Fetch solar irradiance forecast from Open-Meteo and convert to expected power.
@@ -1341,6 +1554,11 @@ def get_inversors():
 
         overvoltage = any(v > 253.0 for v in voltages.values())
 
+        # Per-DC-string health. The classifier uses 24h peak V & W so the
+        # chronic states (fault, unconnected) keep showing correctly at
+        # night when the inverter is legitimately off.
+        strings = _inverter_strings(tag, _INVERTER_STRING_COUNT.get(tag, 0))
+
         return {
             "status": status_val,
             "text": STATUS_MAP.get(status_val, f"Desconegut ({status_val})"),
@@ -1350,6 +1568,7 @@ def get_inversors():
             "voltage_l2": voltages["l2"],
             "voltage_l3": voltages["l3"],
             "overvoltage": overvoltage,
+            "strings": strings,
         }
 
     piko_15 = _inv("piko_15")
@@ -1397,6 +1616,7 @@ def get_inversors():
         "piko_ci_50": piko_ci_50,
         "frequency": round(frequency, 2),
         "phases": phases,
+        "strings_summary": _strings_summary([piko_15, piko_ci_50]),
     }
 
 

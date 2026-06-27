@@ -1,0 +1,82 @@
+<!-- Maximetre — Power Demand Optimization -->
+<div class="section">
+    <div class="section-header">
+        <span class="icon">&#9889;</span>
+        <h2>Optimitzaci&oacute; de Pot&egrave;ncia Contractada</h2>
+    </div>
+
+    {% if d.maximetre.data_available %}
+    <div class="kpi-row" style="grid-template-columns: repeat(2, 1fr);">
+        <div class="kpi-card">
+            <div class="label">Estalvi potencial anual</div>
+            <div class="description">Reduint pot&egrave;ncia als valors recomanats</div>
+            <div class="value {% if d.maximetre.savings_annual > 0 %}val-green{% else %}val-muted{% endif %}">
+                <span data-field="maximetre.savings_annual" data-fmt="2">{{ "%.2f"|format(d.maximetre.savings_annual) }}</span>
+                <span class="unit">&euro;/any</span>
+            </div>
+        </div>
+        <div class="kpi-card">
+            <div class="label">Recomanaci&oacute;</div>
+            <div class="description" style="font-size:0.85rem; margin-bottom:0;">
+                {{ d.maximetre.recommendation }}
+            </div>
+        </div>
+    </div>
+
+    <div class="chart-wrap">
+        <h3>Pot&egrave;ncia contractada vs m&agrave;xim real per per&iacute;ode</h3>
+        <table class="phase-table">
+            <thead>
+                <tr>
+                    <th>Per&iacute;ode</th>
+                    <th>Contractada (kW)</th>
+                    <th>M&agrave;xim real (kW)</th>
+                    <th>Utilitzaci&oacute; %</th>
+                    <th>Recomanada (kW)</th>
+                    <th>Estalvi (EUR/any)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% set period_desc = {
+                    'P1': 'Punta: Gen, Feb, Jul, Des',
+                    'P2': 'Pla alt: Gen-Mar, Jul, Nov-Des',
+                    'P3': 'Pla: Mar, Jun, Ago, Sep, Nov',
+                    'P4': 'Pla baix: Abr-Jun, Ago-Oct',
+                    'P5': 'Vall: Abr, Mai, Oct',
+                    'P6': 'Supervall: nits 0-7h + caps de setmana + festius'
+                } %}
+                {% for p in ['P1','P2','P3','P4','P5','P6'] %}
+                {% set pd = d.maximetre.periods[p] %}
+                <tr>
+                    <td><span class="period-badge">{{ p }}</span><br><span style="font-size:0.72rem; color:var(--muted); white-space:nowrap;">{{ period_desc[p] }}</span></td>
+                    <td>{{ "%.1f"|format(pd.contracted_kw) }}</td>
+                    <td>{{ "%.1f"|format(pd.actual_max_kw) }}</td>
+                    <td>
+                        {% if pd.utilisation_pct > 85 %}
+                        <span style="color: var(--red); font-weight:700;">{{ "%.1f"|format(pd.utilisation_pct) }}%</span>
+                        {% elif pd.utilisation_pct > 50 %}
+                        <span style="color: var(--yellow); font-weight:600;">{{ "%.1f"|format(pd.utilisation_pct) }}%</span>
+                        {% else %}
+                        <span style="color: var(--green);">{{ "%.1f"|format(pd.utilisation_pct) }}%</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ "%.1f"|format(pd.recommended_kw) }}</td>
+                    <td style="font-weight:600; {% if pd.saving_annual > 0 %}color:var(--green);{% endif %}">
+                        {{ "%.2f"|format(pd.saving_annual) }}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <div style="height: 250px; margin-top: 1rem;">
+            <canvas id="chart-maximetre"></canvas>
+        </div>
+    </div>
+    {% else %}
+    <div class="chart-wrap">
+        <p style="color: var(--muted); text-align: center; padding: 2rem;">
+            No hi ha dades de pot&egrave;ncia disponibles per a l'an&agrave;lisi de max&iacute;metre.
+        </p>
+    </div>
+    {% endif %}
+</div>

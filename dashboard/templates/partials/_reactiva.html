@@ -1,0 +1,81 @@
+<!-- Energia Reactiva — Reactive Energy Penalty Tracking -->
+<div class="section">
+    <div class="section-header">
+        <span class="icon">&#128268;</span>
+        <h2>Energia Reactiva</h2>
+    </div>
+
+    {% if d.reactiva.data_available %}
+    <div class="kpi-row" style="grid-template-columns: repeat(2, 1fr);">
+        <div class="kpi-card">
+            <div class="label">Penalitzaci&oacute; estimada mes</div>
+            <div class="description">Per exc&eacute;s de reactiva sobre el 33% de l'activa (cos &phi; &lt; 0,95)</div>
+            <div class="value {% if d.reactiva.total_penalty_eur > 0 %}val-red{% else %}val-green{% endif %}">
+                <span data-field="reactiva.total_penalty_eur" data-fmt="2">{{ "%.2f"|format(d.reactiva.total_penalty_eur) }}</span>
+                <span class="unit">&euro;</span>
+            </div>
+        </div>
+        <div class="kpi-card">
+            <div class="label">Risc de penalitzaci&oacute;</div>
+            <div class="description">Si algun per&iacute;ode supera el l&iacute;mit del 33%</div>
+            <div class="value" style="font-size:1.2rem;">
+                {% if d.reactiva.has_penalty_risk %}
+                <span class="status-badge status-error">Risc detectat</span>
+                {% else %}
+                <span class="status-badge status-ok">Sense risc</span>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="chart-wrap">
+        <h3>Factor de pot&egrave;ncia per per&iacute;ode (mes actual)</h3>
+        <table class="phase-table">
+            <thead>
+                <tr>
+                    <th>Per&iacute;ode</th>
+                    <th>cos &phi;</th>
+                    <th>% Reactiva</th>
+                    <th>Activa (kWh)</th>
+                    <th>Reactiva (kVArh)</th>
+                    <th>Estat</th>
+                    <th>Penalitzaci&oacute; (&euro;)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in ['P1','P2','P3','P4','P5'] %}
+                {% set pd = d.reactiva.periods[p] %}
+                <tr>
+                    <td><span class="period-badge">{{ p }}</span></td>
+                    <td style="font-weight:600;">{{ "%.4f"|format(pd.cos_phi) }}</td>
+                    <td>{{ "%.1f"|format(pd.reactive_pct) }}%</td>
+                    <td>{{ "%.1f"|format(pd.active_kwh) }}</td>
+                    <td>{{ "%.1f"|format(pd.reactive_kvarh) }}</td>
+                    <td>
+                        {% if pd.cos_phi >= 0.98 %}
+                        <span class="status-badge status-ok">Excel&middot;lent</span>
+                        {% elif pd.cos_phi >= 0.95 %}
+                        <span class="status-badge status-idle">Acceptable</span>
+                        {% else %}
+                        <span class="status-badge status-error">Penalitzable</span>
+                        {% endif %}
+                    </td>
+                    <td style="font-weight:600; {% if pd.penalty_eur > 0 %}color:var(--red);{% endif %}">
+                        {{ "%.2f"|format(pd.penalty_eur) }}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <p style="font-size:0.8rem; color:var(--muted); margin-top:0.75rem;">
+            Llindar de penalitzaci&oacute;: reactiva &gt; 33% de l'activa (cos &phi; &lt; 0,95). P6 exempt. Taxa: 0,041554 &euro;/kVArh (BOE).
+        </p>
+    </div>
+    {% else %}
+    <div class="chart-wrap">
+        <p style="color: var(--muted); text-align: center; padding: 2rem;">
+            Dades de factor de pot&egrave;ncia no disponibles. El KSEM no reporta el camp <code>power_factor</code>.
+        </p>
+    </div>
+    {% endif %}
+</div>

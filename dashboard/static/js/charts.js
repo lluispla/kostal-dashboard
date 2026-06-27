@@ -410,9 +410,9 @@ function toggleDashEma() {
     if (lastPowerData) updatePowerCurve(lastPowerData);
 }
 
-/* -- Voltage gauges (half-circle doughnut per phase) ---------------------- */
+/* -- Voltage gauges (half-circle doughnut per phase, per inverter) --------- */
 var gaugeCharts = {};
-var gaugeHWM = { l1: 0, l2: 0, l3: 0 };
+var gaugeHWM = {};
 
 function _gaugeColor(v) {
     if (v > 253) return '#E63946';
@@ -450,20 +450,26 @@ var gaugeCenterPlugin = {
     }
 };
 
-function initGauges(inversors) {
+function _initGaugesForInverter(invId, invData) {
     var phases = ['l1', 'l2', 'l3'];
     phases.forEach(function (ph) {
-        var canvas = document.getElementById('gauge-' + ph);
+        var key = invId + '-' + ph;
+        var canvas = document.getElementById('gauge-' + key);
         if (!canvas) return;
-        var v = inversors.piko_ci_50['voltage_' + ph] || 0;
-        gaugeHWM[ph] = v;
-        _createGauge(canvas, ph, v);
-        _updateGaugeText(ph, v);
+        var v = invData['voltage_' + ph] || 0;
+        gaugeHWM[key] = v;
+        _createGauge(canvas, key, v);
+        _updateGaugeText(key, v);
     });
 }
 
-function _createGauge(canvas, phase, voltage) {
-    if (gaugeCharts[phase]) gaugeCharts[phase].destroy();
+function initGauges(inversors) {
+    _initGaugesForInverter('piko15', inversors.piko_15);
+    _initGaugesForInverter('ci50', inversors.piko_ci_50);
+}
+
+function _createGauge(canvas, key, voltage) {
+    if (gaugeCharts[key]) gaugeCharts[key].destroy();
     var minV = 210, maxV = 260, range = maxV - minV;
     var pct = Math.min(Math.max((voltage - minV) / range, 0), 1);
     var filled = pct * 100;
@@ -488,30 +494,36 @@ function _createGauge(canvas, phase, voltage) {
         plugins: [gaugeCenterPlugin],
     });
     chart.config._gaugeValue = voltage;
-    chart.config._gaugeHWM = gaugeHWM[phase];
-    gaugeCharts[phase] = chart;
+    chart.config._gaugeHWM = gaugeHWM[key];
+    gaugeCharts[key] = chart;
 }
 
-function updateGauges(inversors) {
+function _updateGaugesForInverter(invId, invData) {
     var phases = ['l1', 'l2', 'l3'];
     phases.forEach(function (ph) {
-        var canvas = document.getElementById('gauge-' + ph);
+        var key = invId + '-' + ph;
+        var canvas = document.getElementById('gauge-' + key);
         if (!canvas) return;
-        var v = inversors.piko_ci_50['voltage_' + ph] || 0;
-        if (v > gaugeHWM[ph]) gaugeHWM[ph] = v;
-        _createGauge(canvas, ph, v);
-        _updateGaugeText(ph, v);
+        var v = invData['voltage_' + ph] || 0;
+        if (!gaugeHWM[key] || v > gaugeHWM[key]) gaugeHWM[key] = v;
+        _createGauge(canvas, key, v);
+        _updateGaugeText(key, v);
     });
 }
 
-function _updateGaugeText(phase, voltage) {
-    var valEl = document.getElementById('gauge-val-' + phase);
-    var hwmEl = document.getElementById('gauge-hwm-' + phase);
+function updateGauges(inversors) {
+    _updateGaugesForInverter('piko15', inversors.piko_15);
+    _updateGaugesForInverter('ci50', inversors.piko_ci_50);
+}
+
+function _updateGaugeText(key, voltage) {
+    var valEl = document.getElementById('gauge-val-' + key);
+    var hwmEl = document.getElementById('gauge-hwm-' + key);
     if (valEl) {
         valEl.textContent = voltage.toFixed(1) + ' V';
         valEl.style.color = _gaugeColor(voltage);
     }
-    if (hwmEl) hwmEl.textContent = 'Màx: ' + gaugeHWM[phase].toFixed(1) + ' V';
+    if (hwmEl) hwmEl.textContent = 'Màx: ' + gaugeHWM[key].toFixed(1) + ' V';
 }
 
 /* -- Fullscreen toggle (called from dashboard page) ---------------------- */

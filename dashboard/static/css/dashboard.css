@@ -346,6 +346,75 @@ body {
 .inv-card .inv-stat:last-child { border-bottom: none; }
 .inv-card .inv-stat .inv-val { font-weight: 600; color: var(--navy); }
 
+/* Per-string DC health sub-panel inside each inverter card */
+.strings-section {
+    margin-top: 1rem;
+    padding-top: 0.75rem;
+    border-top: 1px dashed #e0e0e0;
+}
+.strings-section h5 {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--navy);
+    margin: 0 0 0.5rem 0;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.strings-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+    font-variant-numeric: tabular-nums;
+}
+.strings-table th {
+    text-align: right;
+    padding: 0.3rem 0.5rem;
+    font-weight: 600;
+    color: #666;
+    border-bottom: 1px solid #e0e0e0;
+    font-size: 0.78rem;
+}
+.strings-table th:first-child { text-align: left; }
+.strings-table th:last-child  { text-align: center; }
+.strings-table td {
+    text-align: right;
+    padding: 0.4rem 0.5rem;
+    border-bottom: 1px solid #f5f5f5;
+    color: var(--navy);
+}
+.strings-table td:first-child { text-align: left; font-weight: 700; color: #555; }
+.strings-table td:last-child  { text-align: center; }
+.strings-table tr:last-child td { border-bottom: none; }
+.strings-table .status-badge {
+    font-size: 0.72rem;
+    padding: 0.15rem 0.55rem;
+    cursor: help;
+}
+
+/* One-line summary banner in the inverters section header.
+   Pushed to the right of the title with margin-left:auto so the arrow stays
+   pinned to the far right. Stays visible when the section is collapsed. */
+.strings-banner {
+    margin-left: auto;
+    padding: 0.25rem 0.7rem;
+    border-radius: 999px;
+    background: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f1aeb5;
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+    max-width: 60%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+/* Hide automatically when the server emits an empty label (no problems). */
+.strings-banner:empty { display: none; }
+@media (max-width: 700px) {
+    .strings-banner { font-size: 0.72rem; max-width: 50%; }
+}
+
 /* Phase table */
 .phase-table {
     width: 100%;
