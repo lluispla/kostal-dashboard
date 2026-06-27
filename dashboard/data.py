@@ -401,7 +401,7 @@ def _compute_economia_indexed(range_start):
         period = _get_period(hour)
 
         # Full indexed rate: PH = mult × [(OMIE + other) × (1 + losses) + FE + margin] + PTD + CA
-        inner = (omie_price + cf_other) * (1 + cf_losses) + cf_fe + margin
+        inner = (omie_price + _resolve_cf_other(cf, period)) * (1 + cf_losses) + cf_fe + margin
         indexed_rate = cf_mult * inner + peajes[period] + cargos[period]
 
         # Import cost at indexed rate
@@ -520,7 +520,7 @@ def _get_daily_cost_percentiles():
         hour_cost = 0.0
         if imp_kwh > 0:
             calibrated_kwh = imp_kwh * cal_overall
-            inner = (omie_price + cf_other) * (1 + cf_losses) + cf_fe + margin
+            inner = (omie_price + _resolve_cf_other(cf, period)) * (1 + cf_losses) + cf_fe + margin
             rate = cf_mult * inner + peajes[period] + cargos[period]
             hour_cost += calibrated_kwh * rate
 
@@ -1156,7 +1156,7 @@ def _compute_weighted_costs(omie_hours, import_hours, tariff):
         omie_price = omie_by_hour.get(hour, 0.0)
         imp_kwh = import_by_hour.get(hour, 0.0)
         period = _get_period(hour)
-        inner = (omie_price + cf_other) * (1 + cf_losses) + cf_fe + margin
+        inner = (omie_price + _resolve_cf_other(cf, period)) * (1 + cf_losses) + cf_fe + margin
         real_indexed = cf_mult * inner + peajes[period] + cargos[period]
 
         indexed_hourly.append({
@@ -1203,7 +1203,7 @@ def get_mercat_omie():
     cf_other = cf.get("other_costs_eur_kwh", 0.0)
     cf_losses = cf.get("loss_coefficient", 0.0)
     cf_fe = cf.get("efficiency_fund_eur_kwh", 0.0)
-    _inner = (omie_eur_kwh + cf_other) * (1 + cf_losses) + cf_fe + tariff["margin"]
+    _inner = (omie_eur_kwh + _resolve_cf_other(cf, current_period)) * (1 + cf_losses) + cf_fe + tariff["margin"]
     current_indexed_real = (
         cf_mult * _inner
         + tariff["peajes"][current_period]
@@ -1580,7 +1580,7 @@ def _compute_scenario_costs_month():
             result["energy_iber"] += imp_kwh * iber_rates.get(period, 0.153962)
             result["energy_hola"] += imp_kwh * hola_rates.get(period, 0.14)
             result["energy_sper"] += imp_kwh * sper_rates.get(period, 0.13)
-            inner = (omie_price + cf_other) * (1 + cf_losses) + cf_fe + idx_margin
+            inner = (omie_price + _resolve_cf_other(cf, period)) * (1 + cf_losses) + cf_fe + idx_margin
             ph = cf_mult * inner + peajes[period] + cargos[period]
             result["energy_sidx"] += imp_kwh * ph
             result["total_import"] += imp_kwh
@@ -1919,7 +1919,7 @@ def get_historic_data(time_range="30d"):
     indexed_hourly = []
     for t_cet, omie_price in omie_hourly_raw:
         period = _get_period(t_cet)
-        inner = (omie_price + cf_other) * (1 + cf_losses) + cf_fe + tariff["margin"]
+        inner = (omie_price + _resolve_cf_other(cf, period)) * (1 + cf_losses) + cf_fe + tariff["margin"]
         full_rate = cf_mult * inner + tariff["peajes"][period] + tariff["cargos"][period]
         indexed_hourly.append((t_cet, full_rate))
 
@@ -2423,7 +2423,7 @@ def get_amortitzacio_data():
         self_cons_kwh = max(gen_kwh - exp_kwh, 0.0)
         period = _get_period(hour)
 
-        inner = (omie_price + cf_other) * (1 + cf_losses) + cf_fe + margin
+        inner = (omie_price + _resolve_cf_other(cf, period)) * (1 + cf_losses) + cf_fe + margin
         indexed_rate = cf_mult * inner + peajes[period] + cargos[period]
         iber_rate = iber_rates.get(period, 0.154)
 
@@ -2461,7 +2461,7 @@ def get_amortitzacio_data():
         imp_kwh = import_by_h.get(hour, 0.0)
         exp_kwh = export_by_h.get(hour, 0.0)
         period = _get_period(hour)
-        inner = (omie_price + cf_other) * (1 + cf_losses) + cf_fe + margin
+        inner = (omie_price + _resolve_cf_other(cf, period)) * (1 + cf_losses) + cf_fe + margin
         indexed_rate = cf_mult * inner + peajes[period] + cargos[period]
         if imp_kwh > 0:
             monthly_import_cost_idx[month_key] += imp_kwh * indexed_rate
@@ -2597,6 +2597,50 @@ def get_amortitzacio_data():
     }
 
 
+def _resolve_cf_other(cf, period):
+    """Return the contract-formula 'other costs' (€/kWh) for a tariff period.
+
+    'Other costs' (Pc+Sc+Dsv+GdO+POsOm: profile, balancing, deviation, GdO,
+    capacity-payment costs) are genuinely period-dependent. Back-calculation
+    from full-month official meter data + invoice rates (Apr+May 2026) showed
+    stable per-period values (P4≈0.042, P5≈0.017, P6≈0.034) that a single
+    scalar (0.046) over-priced by ~14%. Per-period overrides live in
+    pricing.energy.contract_formula.other_costs_eur_kwh_by_period; periods not
+    listed (e.g. winter P1/P2/P3, no ground-truth yet) fall back to the scalar
+    other_costs_eur_kwh.
+    """
+    by_p = cf.get("other_costs_eur_kwh_by_period") or {}
+    v = by_p.get(period)
+    if v is not None:
+        return v
+    return cf.get("other_costs_eur_kwh", 0.0)
+
+
+def _iee_reduced_rate_for_period(period_start, period_end, pricing):
+    """Return the reduced Art 99.2 IEE rate (€/kWh) if this billing period
+    falls entirely within a configured reduced-IEE window, else None.
+
+    Som Energia applied the reduced rate (kWh × 0.001, "aplicant Art 99.2 de la
+    Llei 28/2014") on some invoices (e.g. 12-31 Mar and Apr 2026) and the
+    standard 5.11269% on others (Feb, early Mar, May 2026), with no predictable
+    pattern. Known historical reduced windows are listed in
+    pricing.taxes.iee_reduced_periods so those invoices reconstruct accurately
+    while the default stays standard for the latest invoice and predictive runs.
+    """
+    windows = pricing.get("taxes", {}).get("iee_reduced_periods", [])
+    for w in windows:
+        try:
+            ws = datetime.strptime(w["start"], "%d/%m/%Y").date()
+            we = datetime.strptime(w["end"], "%d/%m/%Y").date()
+        except (KeyError, ValueError):
+            continue
+        # Containment (not overlap) so a current-month partial range never
+        # accidentally triggers a historical reduced rate.
+        if ws <= period_start.date() and period_end.date() <= we:
+            return w.get("rate_eur_kwh", 0.001)
+    return None
+
+
 def reconstruct_indexed_bill(start_date_str, end_date_str, apply_calibration=True):
     """Reconstruct an indexed bill from InfluxDB data for a date range.
 
@@ -2672,20 +2716,25 @@ def reconstruct_indexed_bill(start_date_str, end_date_str, apply_calibration=Tru
                      for t, v in official_hours}
     has_official = len(official_by_h) > 24  # at least 1 day
 
-    # Load ksem calibration factors (fallback when no official data)
+    # Load ksem calibration factors. Used for any hour that falls back to
+    # KSEM data — including the case where partial official data exists for
+    # the period (then official is used for those hours, KSEM-with-calibration
+    # for the rest).
     cal_factors = {}
     cal_overall = 1.0
     calibrated = False
     data_source = "ksem"
-    if has_official:
-        data_source = "official_meter"
-        calibrated = True  # official data IS calibrated by definition
-    elif apply_calibration:
+
+    if apply_calibration:
         cal_data = pricing.get("ksem_calibration", {})
         if cal_data.get("factors"):
             cal_factors = cal_data["factors"]
             cal_overall = cal_data.get("overall", 1.0)
             calibrated = True
+
+    if has_official:
+        data_source = "official_meter"
+        calibrated = True  # official data IS calibrated by definition
 
     all_hours = sorted(set(omie_by_h) | set(import_by_h) | set(export_by_h)
                        | set(official_by_h))
@@ -2705,20 +2754,20 @@ def reconstruct_indexed_bill(start_date_str, end_date_str, apply_calibration=Tru
         exp_kwh = export_by_h.get(hour, 0.0)
         period = _get_period(hour)
 
-        # Prefer official meter data, fall back to ksem (calibrated)
+        # Prefer official meter data, fall back to KSEM (with calibration
+        # applied per-hour for any hour that doesn't have official data).
         if has_official and hour in official_by_h:
             imp_kwh = official_by_h[hour]
         else:
             imp_kwh = import_by_h.get(hour, 0.0)
-            # Apply ksem-to-meter calibration factor
-            if calibrated and not has_official and imp_kwh > 0:
+            if cal_factors and imp_kwh > 0:
                 factor = cal_factors.get(period)
                 if factor is not None:
                     imp_kwh *= factor
                 else:
                     imp_kwh *= cal_overall
 
-        inner = (omie_price + cf_other) * (1 + cf_losses) + cf_fe + margin
+        inner = (omie_price + _resolve_cf_other(cf, period)) * (1 + cf_losses) + cf_fe + margin
         indexed_rate = cf_mult * inner + peajes[period] + cargos[period]
 
         if imp_kwh > 0:
@@ -2751,10 +2800,25 @@ def reconstruct_indexed_bill(start_date_str, end_date_str, apply_calibration=Tru
     # Compensation (capped at energy cost)
     compensated = min(total_surplus, total_energy_cost)
 
-    # IEE
-    iee_pct = pricing["taxes"]["electricity_tax_pct"] / 100
-    base = total_energy_cost - compensated + power_cost
-    iee = base * iee_pct
+    # Excess power (Facturació per excés de potència)
+    excess_cost, excess_by_period = _compute_excess_power(
+        range_start, range_stop, pricing
+    )
+
+    # IEE — standard rate is a percentage of the base; some historical billing
+    # periods used the reduced Art 99.2 rate (kWh × 0.001). A per-period override
+    # list (pricing.taxes.iee_reduced_periods) captures those known windows so
+    # they reconstruct accurately, while the global default stays standard for
+    # the latest invoice and predictive (no-invoice) reconstructions.
+    base = total_energy_cost - compensated + power_cost + excess_cost
+    reduced_rate = _iee_reduced_rate_for_period(d1, d2, pricing)
+    iee_per_kwh = pricing["taxes"].get("electricity_tax_eur_kwh")  # global override (usually null)
+    if reduced_rate is not None:
+        iee = total_import * reduced_rate
+    elif iee_per_kwh is not None:
+        iee = total_import * iee_per_kwh
+    else:
+        iee = base * (pricing["taxes"]["electricity_tax_pct"] / 100)
 
     # Fixed charges
     rental = pricing["fixed_charges_eur_day"]["equipment_rental"] * days
@@ -2781,6 +2845,8 @@ def reconstruct_indexed_bill(start_date_str, end_date_str, apply_calibration=Tru
     return {
         "energia": round(total_energy_cost, 2),
         "potencia": round(power_cost, 2),
+        "exces_potencia": round(excess_cost, 2),
+        "exces_by_period": excess_by_period,
         "imp_electric": round(iee, 2),
         "fixes": round(fixes, 2),
         "iva": round(iva, 2),
@@ -2793,6 +2859,59 @@ def reconstruct_indexed_bill(start_date_str, end_date_str, apply_calibration=Tru
         "calibrated": calibrated,
         "data_source": data_source,
     }
+
+
+def _compute_excess_power(range_start, range_stop, pricing):
+    """Quarter-hourly excess-power billing for 3.0TD.
+
+    Formula (ORDEN IET/107/2014, applied to 3.0TD):
+      FEP_p = sum_i (Pm_i - Pc_p)  for all 15-min intervals where Pm_i > Pc_p
+      cost_p = FEP_p × Te_p
+
+    KSEM active_power systematically under-reads vs the official maximeter
+    (same ~11% gap observed in kWh totals), so we apply the same per-period
+    calibration factor used for energy before checking overages.
+
+    Returns (total_excess_cost_eur, {period: {excess_kw, cost_eur}}).
+    """
+    contracted = pricing.get("contracted_power_kw", {})
+    te_prices = pricing.get("excess_power_prices_eur_kw", {})
+    if not contracted or not te_prices:
+        return 0.0, {p: {"excess_kw": 0.0, "cost_eur": 0.0}
+                     for p in ["P1", "P2", "P3", "P4", "P5", "P6"]}
+
+    cal = pricing.get("ksem_calibration", {})
+    cal_factors = cal.get("factors", {})
+    cal_overall = cal.get("overall", 1.0)
+
+    records = _hourly_records(f'''
+        from(bucket: "{INFLUXDB_BUCKET}")
+          |> range(start: {range_start}, stop: {range_stop})
+          |> filter(fn: (r) => r._measurement == "ksem")
+          |> filter(fn: (r) => r._field == "active_power_total")
+          |> aggregateWindow(every: 15m, fn: mean, createEmpty: false)
+    ''')
+
+    result = {p: {"excess_kw": 0.0, "cost_eur": 0.0}
+              for p in ["P1", "P2", "P3", "P4", "P5", "P6"]}
+    for t_cet, val_w in records:
+        if val_w is None or val_w <= 0:
+            continue
+        period = _get_period(t_cet)
+        pc = contracted.get(period, 0.0)
+        factor = cal_factors.get(period) or cal_overall
+        pm_kw = (val_w / 1000.0) * factor
+        if pm_kw > pc:
+            result[period]["excess_kw"] += (pm_kw - pc)
+
+    total_cost = 0.0
+    for p in result:
+        cost = result[p]["excess_kw"] * te_prices.get(p, 0.0)
+        result[p]["excess_kw"] = round(result[p]["excess_kw"], 2)
+        result[p]["cost_eur"] = round(cost, 2)
+        total_cost += cost
+
+    return total_cost, result
 
 
 def get_maximetre_analysis():
@@ -3002,6 +3121,9 @@ def _run_battery_sim(capacity_kwh, max_charge_kw, max_discharge_kw, efficiency,
     soc_curve is only populated for today's hours when today_only_soc=True.
     """
     import math
+    # cf_other is also received as a scalar param (back-compat), but per-period
+    # 'other costs' are resolved from the contract formula via the tariff dict.
+    cf = tariff.get("contract_formula", {})
     eff_sqrt = math.sqrt(efficiency)
     soc = 0.0
     avoided_import_kwh = 0.0
@@ -3018,7 +3140,7 @@ def _run_battery_sim(capacity_kwh, max_charge_kw, max_discharge_kw, efficiency,
         period = _get_period(hour)
 
         # Indexed rate for this hour
-        inner = (omie_price + cf_other) * (1 + cf_losses) + cf_fe + margin
+        inner = (omie_price + _resolve_cf_other(cf, period)) * (1 + cf_losses) + cf_fe + margin
         indexed_rate = cf_mult * inner + peajes[period] + cargos[period]
 
         # Charge from export surplus
@@ -3295,7 +3417,7 @@ def get_load_shifting():
         h = hour.hour
         period = _get_period(hour)
 
-        inner = (omie_p + cf_other) * (1 + cf_losses) + cf_fe + margin_val
+        inner = (omie_p + _resolve_cf_other(cf, period)) * (1 + cf_losses) + cf_fe + margin_val
         rate = cf_mult * inner + peajes[period] + cargos[period]
 
         total_import_kwh += imp
@@ -3985,7 +4107,7 @@ def _compute_bill_forecast(energy_cost_today, compensation_today,
 
         if imp_kwh > 0:
             cal_kwh = imp_kwh * cal_overall
-            inner = (omie + cf_other) * (1 + cf_losses) + cf_fe + margin_t
+            inner = (omie + _resolve_cf_other(cf, period)) * (1 + cf_losses) + cf_fe + margin_t
             rate = cf_mult * inner + peajes_t.get(period, 0) + cargos_t.get(period, 0)
             daily_net[day_key]["energy_cost"] += cal_kwh * rate
 
@@ -4136,7 +4258,7 @@ def get_consum_preus_data(time_range="today"):
         calibrated_kwh = raw_import * cal_overall
 
         # Energy rate (indexed formula)
-        inner = (omie + cf_other) * (1 + cf_losses) + cf_fe + margin
+        inner = (omie + _resolve_cf_other(cf, period)) * (1 + cf_losses) + cf_fe + margin
         rate = cf_mult * inner + peajes.get(period, 0) + cargos.get(period, 0)
 
         # Energy cost
@@ -5335,7 +5457,7 @@ def get_yoy_comparison(month, day):
                 # Simplified: use production to estimate avoided import
                 omie_kwh = omie_by_h.get(h, 0)
                 period = _get_period(datetime(year, month, day, h, 0, tzinfo=_CET))
-                inner = (omie_kwh + cf_other) * (1 + cf_losses) + cf_fe + margin
+                inner = (omie_kwh + _resolve_cf_other(cf, period)) * (1 + cf_losses) + cf_fe + margin
                 rate = cf_mult * inner + peajes.get(period, 0) + cargos.get(period, 0)
                 # For actual 2026 data, use real import
                 if actual and actual["import"]:
@@ -5354,7 +5476,7 @@ def get_yoy_comparison(month, day):
                 imp_kwh = pt["v"] * cal
                 omie_kwh = omie_by_h.get(h, 0)
                 period = _get_period(datetime(year, month, day, h, 0, tzinfo=_CET))
-                inner = (omie_kwh + cf_other) * (1 + cf_losses) + cf_fe + margin
+                inner = (omie_kwh + _resolve_cf_other(cf, period)) * (1 + cf_losses) + cf_fe + margin
                 rate = cf_mult * inner + peajes.get(period, 0) + cargos.get(period, 0)
                 estimated_cost += imp_kwh * rate
 

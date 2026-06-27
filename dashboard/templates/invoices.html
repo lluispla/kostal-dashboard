@@ -1,13 +1,18 @@
 {% extends "base.html" %}
 {% block title %}Factures{% endblock %}
 
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3"></script>
+{% endblock %}
+
 {% block header_right %}
-<span>Gestió de factures Iberdrola</span>
+<span>Gesti&oacute; de factures</span>
 {% endblock %}
 
 {% block content %}
 <div class="upload-card">
-    <h2>Pujar factura Iberdrola (PDF)</h2>
+    <h2>Pujar factura (PDF)</h2>
     <form action="{{ url_for('factures_upload') }}" method="post" enctype="multipart/form-data" class="upload-form">
         <div class="file-input">
             <input type="file" name="file" accept=".pdf">
@@ -16,6 +21,57 @@
     </form>
 </div>
 
+<div class="upload-card">
+    <h2>Pujar dades hor&agrave;ries (CSV infoenergia)</h2>
+    <form action="{{ url_for('factures_upload_csv') }}" method="post" enctype="multipart/form-data" class="upload-form">
+        <div class="file-input">
+            <input type="file" name="csv_file" accept=".csv">
+        </div>
+        <button type="submit" class="btn btn-primary">Importar</button>
+    </form>
+</div>
+
+<!-- Trends section (chart first) -->
+<div class="section" id="trends-section">
+    <div class="section-header">
+        <span class="icon">&#128200;</span>
+        <h2>Evoluci&oacute; de Factures</h2>
+    </div>
+
+    <div id="trends-loading" style="color: var(--muted); font-size: 0.9rem;">Carregant dades de tend&egrave;ncia...</div>
+
+    <div id="trends-content" style="display:none;">
+        <!-- Chart: total + effective rate -->
+        <div style="position:relative; height:350px; margin-bottom:1.5rem;">
+            <canvas id="chart-trends"></canvas>
+        </div>
+
+        <!-- Summary table -->
+        <div style="overflow-x:auto; margin-bottom:1rem;">
+            <table class="data-table" id="trends-table">
+                <thead>
+                    <tr>
+                        <th>Per&iacute;ode</th>
+                        <th>Total &euro;</th>
+                        <th>kWh</th>
+                        <th>&euro;/kWh all-in</th>
+                        <th>Desviaci&oacute; reconstrucci&oacute; %</th>
+                    </tr>
+                </thead>
+                <tbody id="trends-tbody">
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div id="trends-empty" style="display:none;">
+        <div class="empty-state">
+            <p>No hi ha prou factures per mostrar tend&egrave;ncies.</p>
+        </div>
+    </div>
+</div>
+
+<!-- Factures table -->
 <div class="section">
     <div class="section-header">
         <span class="icon">&#128196;</span>
@@ -32,20 +88,136 @@
                         {{ inv.billing_start }} &mdash; {{ inv.billing_end }}
                         ({{ inv.billing_days }} dies)
                     {% else %}
-                        Període no detectat
+                        Per&iacute;ode no detectat
                     {% endif %}
                 </div>
             </div>
             {% if inv.total %}
             <div class="total">{{ "%.2f"|format(inv.total) }} &euro;</div>
             {% endif %}
-            <a href="{{ url_for('factures_analysis', filename=inv.filename.replace('.pdf', '.json')) }}">Veure anàlisi &rarr;</a>
+            <a href="{{ url_for('factures_analysis', filename=inv.filename.replace('.pdf', '.json')) }}">Veure an&agrave;lisi &rarr;</a>
         </div>
         {% endfor %}
     {% else %}
         <div class="empty-state">
-            <p>Cap factura analitzada encara. Puja un PDF d'Iberdrola per començar.</p>
+            <p>Cap factura analitzada encara. Puja un PDF per comen&ccedil;ar.</p>
         </div>
     {% endif %}
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+    fetch('/api/factures/trends')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            var loading = document.getElementById('trends-loading');
+            var content = document.getElementById('trends-content');
+            var empty = document.getElementById('trends-empty');
+
+            if (!data.summaries || data.summaries.length === 0) {
+                loading.style.display = 'none';
+                empty.style.display = 'block';
+                return;
+            }
+
+            // Build table
+            var tbody = document.getElementById('trends-tbody');
+            data.summaries.forEach(function(s) {
+                var tr = document.createElement('tr');
+                var devText = s.deviation_pct !== null ? s.deviation_pct.toFixed(1) + '%' : '—';
+                var devClass = '';
+                if (s.deviation_pct !== null) {
+                    if (Math.abs(s.deviation_pct) <= 2) devClass = 'deviation-ok';
+                    else if (Math.abs(s.deviation_pct) <= 5) devClass = 'deviation-warn';
+                    else devClass = 'deviation-error';
+                }
+                tr.innerHTML = '<td>' + s.billing_start + ' — ' + s.billing_end + '</td>'
+                    + '<td style="text-align:right;">' + s.total.toFixed(2) + '</td>'
+                    + '<td style="text-align:right;">' + s.total_kwh.toFixed(1) + '</td>'
+                    + '<td style="text-align:right;">' + s.effective_eur_kwh.toFixed(4) + '</td>'
+                    + '<td style="text-align:right;" class="' + devClass + '">' + devText + '</td>';
+                tbody.appendChild(tr);
+            });
+
+            // Build chart
+            var ctx = document.getElementById('chart-trends');
+            if (ctx && data.chart.labels.length > 0) {
+                new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: data.chart.labels,
+                        datasets: [
+                            {
+                                label: 'Total factura (EUR)',
+                                data: data.chart.totals,
+                                backgroundColor: '#0C4DA2',
+                                borderRadius: 3,
+                                yAxisID: 'y',
+                                order: 2,
+                            },
+                            {
+                                label: 'EUR/kWh all-in',
+                                data: data.chart.effective_rates,
+                                type: 'line',
+                                borderColor: '#E63946',
+                                borderWidth: 2,
+                                pointRadius: 4,
+                                pointBackgroundColor: '#E63946',
+                                fill: false,
+                                yAxisID: 'y1',
+                                order: 1,
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        interaction: { mode: 'index', intersect: false },
+                        plugins: {
+                            legend: { position: 'top', labels: { usePointStyle: true, boxWidth: 8 } },
+                            tooltip: {
+                                callbacks: {
+                                    title: function(items) {
+                                        return items[0].label;
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                type: 'time',
+                                time: { unit: 'month', displayFormats: { month: 'MMM yyyy' } },
+                                grid: { display: false },
+                                ticks: { color: '#6c757d' },
+                            },
+                            y: {
+                                type: 'linear',
+                                position: 'left',
+                                beginAtZero: true,
+                                ticks: { color: '#0C4DA2', callback: function(v) { return v + ' EUR'; } },
+                                grid: { color: '#f0f0f0' },
+                            },
+                            y1: {
+                                type: 'linear',
+                                position: 'right',
+                                beginAtZero: true,
+                                ticks: { color: '#E63946', callback: function(v) { return v.toFixed(3); } },
+                                grid: { drawOnChartArea: false },
+                            },
+                        }
+                    }
+                });
+            }
+
+            loading.style.display = 'none';
+            content.style.display = 'block';
+        })
+        .catch(function(err) {
+            console.warn('Trends fetch failed:', err);
+            document.getElementById('trends-loading').textContent = 'Error carregant tend\u00e8ncies.';
+        });
+})();
+</script>
 {% endblock %}

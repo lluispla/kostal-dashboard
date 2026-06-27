@@ -6,6 +6,9 @@
     {% if data.invoice.billing_start and data.invoice.billing_end %}
     &mdash; {{ data.invoice.billing_start }} a {{ data.invoice.billing_end }}
     {% endif %}
+    {% if data.invoice.supplier %}
+    <span class="period-badge" style="background: var(--green);">{{ data.invoice.supplier|upper }}</span>
+    {% endif %}
 </span>
 {% endblock %}
 
@@ -27,7 +30,7 @@
         <div class="value val-blue">{{ "%.0f"|format(data.invoice.total_consumption_kwh) }} <span class="unit">kWh</span></div>
     </div>
     <div class="kpi-card">
-        <div class="label">Cost efectiu</div>
+        <div class="label">Cost all-in (sense IVA)</div>
         <div class="value val-navy">{{ "%.4f"|format(data.effective_eur_kwh) }} <span class="unit">&euro;/kWh</span></div>
     </div>
     <div class="kpi-card">
@@ -35,6 +38,84 @@
         <div class="value val-green">{{ "%.2f"|format(data.injection_compensation) }} <span class="unit">&euro;</span></div>
     </div>
 </div>
+
+{% if data.comparison %}
+<!-- Bill Reconstruction Comparison -->
+<div class="analysis-section">
+    <h2>Validació Factura &mdash; Reconstrucció vs Factura Real</h2>
+    <p style="color: var(--muted); font-size: 0.85rem; margin-bottom: 1rem;">
+        Comparem la factura rebuda amb la reconstrucció basada en dades reals d'InfluxDB
+        ({{ data.reconstruction.days }} dies, {{ data.reconstruction.import_kwh }} kWh importats,
+        {{ data.reconstruction.export_kwh }} kWh exportats).
+    </p>
+
+    <table class="bill-compare-table">
+        <thead>
+            <tr>
+                <th>Concepte</th>
+                <th class="num">Factura (&euro;)</th>
+                <th class="num">Reconstru&iuml;t (&euro;)</th>
+                <th class="num">Desviaci&oacute; %</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in data.comparison %}
+            <tr{% if row.concepte == 'TOTAL' %} class="total"{% endif %}>
+                <td>{{ row.concepte }}</td>
+                <td class="num">{% if row.factura is not none %}{{ "%.2f"|format(row.factura) }}{% else %}&mdash;{% endif %}</td>
+                <td class="num">{{ "%.2f"|format(row.reconstruit) }}</td>
+                <td class="num">
+                    {% if row.desviacio_pct is not none %}
+                    <span class="{{ row.css_class }}" style="padding: 0.15rem 0.5rem; border-radius: 4px;">
+                        {{ "%+.1f"|format(row.desviacio_pct) }}%
+                    </span>
+                    {% else %}&mdash;{% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% if data.period_comparison %}
+<!-- Per-period comparison -->
+<div class="analysis-section">
+    <h2>Detall per Per&iacute;ode</h2>
+    <table class="bill-compare-table">
+        <thead>
+            <tr>
+                <th>Per&iacute;ode</th>
+                <th class="num">kWh Factura</th>
+                <th class="num">kWh Recon.</th>
+                <th class="num">Desv. kWh</th>
+                <th class="num">Tarifa Fact.</th>
+                <th class="num">Tarifa Recon.</th>
+                <th class="num">Desv. Tarifa</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for p in data.period_comparison %}
+            {% if p.inv_kwh > 0 or p.rec_kwh > 0 %}
+            <tr>
+                <td><span class="period-badge">{{ p.period }}</span></td>
+                <td class="num">{{ "%.2f"|format(p.inv_kwh) }}</td>
+                <td class="num">{{ "%.2f"|format(p.rec_kwh) }}</td>
+                <td class="num">
+                    {% if p.kwh_class %}<span class="{{ p.kwh_class }}" style="padding: 0.1rem 0.4rem; border-radius: 4px;">{{ "%+.1f"|format(p.kwh_pct) }}%</span>{% else %}&mdash;{% endif %}
+                </td>
+                <td class="num">{{ "%.6f"|format(p.inv_rate) }}</td>
+                <td class="num">{{ "%.6f"|format(p.rec_rate) }}</td>
+                <td class="num">
+                    {% if p.rate_class %}<span class="{{ p.rate_class }}" style="padding: 0.1rem 0.4rem; border-radius: 4px;">{{ "%+.1f"|format(p.rate_pct) }}%</span>{% else %}&mdash;{% endif %}
+                </td>
+            </tr>
+            {% endif %}
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+{% endif %}
 
 <!-- Consumption breakdown -->
 <div class="analysis-section">

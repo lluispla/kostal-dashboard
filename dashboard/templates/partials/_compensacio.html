@@ -1,0 +1,72 @@
+<!-- Compensacio Simplificada — Surplus vs Energy Cost gauge -->
+<div class="section">
+    <div class="section-header">
+        <span class="icon">&#9878;</span>
+        <h2>Compensaci&oacute; Simplificada</h2>
+    </div>
+
+    <div class="kpi-row">
+        <div class="kpi-card">
+            <div class="label">Cost energia importada (mes)</div>
+            <div class="description">Import mensual a preu indexat horari</div>
+            <div class="value val-red">
+                <span data-field="compensacio.energy_cost" data-fmt="2">{{ "%.2f"|format(d.compensacio.energy_cost) }}</span>
+                <span class="unit">&euro;</span>
+            </div>
+        </div>
+
+        <div class="kpi-card">
+            <div class="label">Excedent brut (mes)</div>
+            <div class="description">Valor total excedent a preu OMIE spot</div>
+            <div class="value val-green">
+                <span data-field="compensacio.surplus_raw" data-fmt="2">{{ "%.2f"|format(d.compensacio.surplus_raw) }}</span>
+                <span class="unit">&euro;</span>
+            </div>
+        </div>
+
+        <div class="kpi-card">
+            <div class="label">Compensat (mes)</div>
+            <div class="description">m&iacute;n(excedent, cost energia) &mdash; m&agrave;xim dedu&iuml;ble</div>
+            <div class="value val-blue">
+                <span data-field="compensacio.compensated" data-fmt="2">{{ "%.2f"|format(d.compensacio.compensated) }}</span>
+                <span class="unit">&euro;</span>
+            </div>
+        </div>
+
+        <div class="kpi-card">
+            <div class="label">Malbaratat (mes)</div>
+            <div class="description">Excedent que supera el l&iacute;mit de compensaci&oacute;</div>
+            <div class="value {% if d.compensacio.wasted > 0 %}val-red{% else %}val-green{% endif %}">
+                <span data-field="compensacio.wasted" data-fmt="2">{{ "%.2f"|format(d.compensacio.wasted) }}</span>
+                <span class="unit">&euro;</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Gauge + recommendation -->
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-top: 0.5rem;">
+        <div class="chart-wrap" style="text-align: center;">
+            <h3>Ratio Excedent / Cost Energia</h3>
+            <div style="max-width: 280px; margin: 0 auto;">
+                <canvas id="gauge-compensacio" style="max-height: 160px;"></canvas>
+            </div>
+            <div style="margin-top: 0.5rem;">
+                <span style="font-size: 1.8rem; font-weight: 700;" id="compensacio-ratio-val"
+                      data-field="compensacio.ratio_pct" data-fmt="1">{{ "%.1f"|format(d.compensacio.ratio_pct) }}</span>
+                <span style="font-size: 0.9rem; color: var(--muted);">%</span>
+            </div>
+            <div style="font-size: 0.75rem; color: var(--muted); margin-top: 0.25rem;">
+                Aprofitament: <span data-field="compensacio.aprofitament_pct" data-fmt="1">{{ "%.1f"|format(d.compensacio.aprofitament_pct) }}</span>%
+            </div>
+        </div>
+
+        <div class="chart-wrap" style="display: flex; flex-direction: column; justify-content: center;">
+            <h3>Recomanaci&oacute;</h3>
+            <p style="font-size: 0.95rem; line-height: 1.6;" id="compensacio-rec">{{ d.compensacio.recommendation }}</p>
+            <div style="margin-top: 1rem; font-size: 0.8rem; color: var(--muted);">
+                <strong>L&iacute;mit regulatori:</strong> La compensaci&oacute; simplificada no pot superar el cost
+                de l'energia consumida de la xarxa en el per&iacute;ode de facturaci&oacute;.
+            </div>
+        </div>
+    </div>
+</div>

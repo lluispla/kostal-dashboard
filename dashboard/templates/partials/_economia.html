@@ -1,59 +1,217 @@
-<!-- Economia — 5 KPI cards -->
+<!-- Economia — Som Energia Indexada + Iberdrola baseline -->
 <div class="section">
     <div class="section-header">
         <span class="icon">&#128176;</span>
-        <h2>Economia</h2>
+        <h2>Economia <span style="font-size:0.7rem; color:#888; font-weight:normal;">(Som Energia Indexada)</span></h2>
     </div>
 
-    <div class="kpi-grid">
-        <!-- Estalvi autoconsum -->
+    <!-- Row 1 — Today's solar benefits -->
+    <div class="kpi-row">
         <div class="kpi-card">
             <div class="label">Estalvi autoconsum avui</div>
-            <div class="description">Energia autoconsumida ({{ d.economia.self_consumption_kwh_today }} kWh) &times; tarifa fixa contractada</div>
+            <div class="description">Energia autoconsumida ({{ d.economia.self_consumption_kwh_today }} kWh) &times; preu indexat horari</div>
             <div class="value val-blue">
                 <span data-field="economia.savings_today" data-fmt="2">{{ "%.2f"|format(d.economia.savings_today) }}</span>
                 <span class="unit">&euro;</span>
             </div>
         </div>
 
-        <!-- Ingressos injecció -->
         <div class="kpi-card">
-            <div class="label">Ingressos injecció avui</div>
-            <div class="description">Energia exportada a xarxa ({{ d.economia.export_kwh_today }} kWh) &times; preu compensació</div>
+            <div class="label">Compensaci&oacute; excedents avui</div>
+            <div class="description">Exportat ({{ d.economia.export_kwh_today }} kWh) &times; preu OMIE spot horari</div>
             <div class="value val-green">
                 <span data-field="economia.injection_income_today" data-fmt="2">{{ "%.2f"|format(d.economia.injection_income_today) }}</span>
                 <span class="unit">&euro;</span>
             </div>
         </div>
 
-        <!-- Benefici total avui -->
         <div class="kpi-card">
-            <div class="label">Benefici total avui</div>
-            <div class="description">Estalvi autoconsum + ingressos injecció del dia</div>
+            <div class="label">Benefici solar avui</div>
+            <div class="description">Estalvi autoconsum + compensaci&oacute; excedents</div>
             <div class="value val-blue">
                 <span data-field="economia.total_benefit_today" data-fmt="2">{{ "%.2f"|format(d.economia.total_benefit_today) }}</span>
                 <span class="unit">&euro;</span>
             </div>
         </div>
 
-        <!-- Benefici mensual -->
         <div class="kpi-card">
-            <div class="label">Benefici mensual acumulat</div>
-            <div class="description">Suma d'estalvi + injecció des de l'1 del mes</div>
+            <div class="label">Benefici solar mes</div>
+            <div class="description">Acumulat des de l'1 del mes</div>
             <div class="value val-navy">
                 <span data-field="economia.monthly_benefit" data-fmt="2">{{ "%.2f"|format(d.economia.monthly_benefit) }}</span>
                 <span class="unit">&euro;</span>
             </div>
         </div>
+    </div>
 
-        <!-- Cost efectiu -->
+    <!-- Row 2 — Import cost + effective rate -->
+    <div class="kpi-row">
         <div class="kpi-card">
-            <div class="label">Cost efectiu &euro;/kWh</div>
-            <div class="description">Preu real per kWh consumit, tenint en compte l'autoconsum solar</div>
+            <div class="label">Cost importaci&oacute; avui</div>
+            <div class="description">Importat ({{ d.economia.imported_kwh_today }} kWh) a preu indexat horari</div>
+            <div class="value val-red">
+                <span data-field="economia.import_cost_today" data-fmt="2">{{ "%.2f"|format(d.economia.import_cost_today) }}</span>
+                <span class="unit">&euro;</span>
+            </div>
+        </div>
+
+        <div class="kpi-card">
+            <div class="label">Cost importaci&oacute; mes</div>
+            <div class="description">Acumulat del mes (energia importada de xarxa)</div>
+            <div class="value val-red">
+                <span data-field="economia.import_cost_month" data-fmt="2">{{ "%.2f"|format(d.economia.import_cost_month) }}</span>
+                <span class="unit">&euro;</span>
+            </div>
+        </div>
+
+        <div class="kpi-card">
+            <div class="label">Preu mitj&agrave; indexat</div>
+            <div class="description">Preu ponderat per kWh importat avui (f&oacute;rmula completa)</div>
             <div class="value val-navy">
-                <span data-field="economia.effective_cost_kwh" data-fmt="4">{{ "%.4f"|format(d.economia.effective_cost_kwh) }}</span>
+                <span data-field="economia.avg_indexed_rate" data-fmt="4">{{ "%.4f"|format(d.economia.avg_indexed_rate) }}</span>
+                <span class="unit">&euro;/kWh</span>
+            </div>
+        </div>
+
+        <div class="kpi-card">
+            <div class="label">Cost all-in &euro;/kWh</div>
+            <div class="description">Factura estimada (sense IVA) / kWh importats &mdash; energia + pot&egrave;ncia + IEE + fixes</div>
+            <div class="value val-navy">
+                <span data-field="economia.cost_all_in_kwh" data-fmt="4">{{ "%.4f"|format(d.economia.cost_all_in_kwh) }}</span>
                 <span class="unit">&euro;/kWh</span>
             </div>
         </div>
     </div>
+
+    <!-- Row 3 — Iberdrola baseline comparison -->
+    <div class="kpi-row">
+        <div class="kpi-card">
+            <div class="label">vs Iberdrola &mdash; import avui</div>
+            <div class="description">Iber {{ "%.2f"|format(d.economia.iber_import_cost_today) }}&euro; vs Som {{ "%.2f"|format(d.economia.import_cost_today) }}&euro;</div>
+            <div class="value" data-diff-color>
+                <span data-field="economia.diff_import_today" data-fmt="+2">{{ "%+.2f"|format(d.economia.diff_import_today) }}</span>
+                <span class="unit">&euro;</span>
+            </div>
+        </div>
+
+        <div class="kpi-card">
+            <div class="label">vs Iberdrola &mdash; import mes</div>
+            <div class="description">Iber {{ "%.2f"|format(d.economia.iber_import_cost_month) }}&euro; vs Som {{ "%.2f"|format(d.economia.import_cost_month) }}&euro;</div>
+            <div class="value" data-diff-color>
+                <span data-field="economia.diff_import_month" data-fmt="+2">{{ "%+.2f"|format(d.economia.diff_import_month) }}</span>
+                <span class="unit">&euro;</span>
+            </div>
+        </div>
+
+        <div class="kpi-card">
+            <div class="label">vs Iberdrola &mdash; benefici avui</div>
+            <div class="description">Benefici solar amb Iber: {{ "%.2f"|format(d.economia.iber_total_benefit_today) }}&euro;</div>
+            <div class="value" data-diff-color>
+                <span data-field="economia.diff_today" data-fmt="+2">{{ "%+.2f"|format(d.economia.diff_today) }}</span>
+                <span class="unit">&euro;</span>
+            </div>
+        </div>
+
+        <div class="kpi-card">
+            <div class="label">vs Iberdrola &mdash; benefici mes</div>
+            <div class="description">Benefici solar amb Iber: {{ "%.2f"|format(d.economia.iber_monthly_benefit) }}&euro;</div>
+            <div class="value" data-diff-color>
+                <span data-field="economia.diff_month" data-fmt="+2">{{ "%+.2f"|format(d.economia.diff_month) }}</span>
+                <span class="unit">&euro;</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Row 4 — Full bill estimation (pre-IVA) -->
+    <div class="kpi-row">
+        <div class="kpi-card">
+            <div class="label">Factura estimada Som (pre-IVA)</div>
+            <div class="description">Acumulat {{ d.economia.bill_days_elapsed }}d: energia + pot&egrave;ncia + lloguer + IEE - compensaci&oacute;</div>
+            <div class="value val-navy">
+                <span data-field="economia.bill_som_month" data-fmt="2">{{ "%.2f"|format(d.economia.bill_som_month) }}</span>
+                <span class="unit">&euro;</span>
+            </div>
+            <div class="kpi-pct val-navy">
+                <span data-field="economia.bill_som_day" data-fmt="2">{{ "%.2f"|format(d.economia.bill_som_day) }}</span> &euro;/dia
+            </div>
+        </div>
+
+        <div class="kpi-card">
+            <div class="label">Factura estimada Iber (pre-IVA)</div>
+            <div class="description">Qu&egrave; pagaries amb Iberdrola fix pel mateix consum</div>
+            <div class="value val-muted">
+                <span data-field="economia.bill_iber_month" data-fmt="2">{{ "%.2f"|format(d.economia.bill_iber_month) }}</span>
+                <span class="unit">&euro;</span>
+            </div>
+            <div class="kpi-pct val-muted">
+                <span data-field="economia.bill_iber_day" data-fmt="2">{{ "%.2f"|format(d.economia.bill_iber_day) }}</span> &euro;/dia
+            </div>
+        </div>
+
+        <div class="kpi-card">
+            <div class="label">Projecti&oacute; mes complet ({{ d.economia.bill_days_total }}d)</div>
+            <div class="description">Som: {{ "%.0f"|format(d.economia.bill_som_projected) }}&euro; &mdash; Iber: {{ "%.0f"|format(d.economia.bill_iber_projected) }}&euro; (pre-IVA)</div>
+            <div class="value" data-diff-color>
+                <span data-field="economia.bill_diff_projected" data-fmt="+2">{{ "%+.2f"|format(d.economia.bill_diff_projected) }}</span>
+                <span class="unit">&euro;</span>
+            </div>
+            <div class="kpi-pct">(positiu = Som &eacute;s m&eacute;s barata)</div>
+        </div>
+
+        <div class="kpi-card">
+            <div class="label">Cost diari mitj&agrave; (pre-IVA)</div>
+            <div class="description">Tot incl&ograve;s: energia + pot&egrave;ncia + fixes + IEE</div>
+            <div class="value val-navy">
+                <span data-field="economia.bill_som_day" data-fmt="2">{{ "%.2f"|format(d.economia.bill_som_day) }}</span>
+                <span class="unit">&euro;/dia</span>
+            </div>
+            <div class="kpi-pct val-muted">
+                amb IVA: {{ "%.2f"|format(d.economia.bill_som_day * 1.21) }} &euro;/dia
+            </div>
+        </div>
+    </div>
+
+    <!-- Row 5 — Flux Solar what-if -->
+    {% if d.economia.flux_credit_eur is defined %}
+    <div class="kpi-row">
+        <div class="kpi-card">
+            <div class="label">Cr&egrave;dit Flux Solar</div>
+            <div class="description">Excedents no compensats &times; {{ "%.0f"|format(d.economia.flux_credit_pct * 100) }}% cr&egrave;dit</div>
+            <div class="value val-green">
+                <span data-field="economia.flux_credit_eur" data-fmt="2">{{ "%.2f"|format(d.economia.flux_credit_eur) }}</span>
+                <span class="unit">&euro;</span>
+            </div>
+        </div>
+
+        <div class="kpi-card">
+            <div class="label">Factura amb Flux Solar</div>
+            <div class="description">Projecci&oacute; mensual aplicant cr&egrave;dit Flux Solar</div>
+            <div class="value val-navy">
+                <span data-field="economia.flux_bill_projected" data-fmt="2">{{ "%.2f"|format(d.economia.flux_bill_projected) }}</span>
+                <span class="unit">&euro;</span>
+            </div>
+        </div>
+
+        <div class="kpi-card">
+            <div class="label">Estalvi vs sense Flux</div>
+            <div class="description">Difer&egrave;ncia entre factura sense i amb Flux Solar</div>
+            <div class="value val-green">
+                <span data-field="economia.flux_saving_vs_no_flux" data-fmt="2">{{ "%.2f"|format(d.economia.flux_saving_vs_no_flux) }}</span>
+                <span class="unit">&euro;</span>
+            </div>
+        </div>
+
+        <div class="kpi-card">
+            <div class="label">Estat Flux Solar</div>
+            <div class="description">Modalitat d'autoconsum col&middot;lectiu</div>
+            <div class="value" style="font-size:1.2rem;">
+                {% if d.economia.flux_enabled %}
+                <span class="status-badge status-ok">Actiu</span>
+                {% else %}
+                <span class="status-badge status-idle">Pendent legalitzaci&oacute;</span>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
 </div>
