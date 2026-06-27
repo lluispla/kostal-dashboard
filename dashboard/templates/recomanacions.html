@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% block title %}Recomanacions{% endblock %}
+
+{% block header_right %}
+<span>Recomanacions de Despla&ccedil;ament de C&agrave;rrega</span>
+{% endblock %}
+
+{% block content %}
+<div class="section">
+    <div class="section-header">
+        <span class="icon">&#128161;</span>
+        <h2>An&agrave;lisi de Despla&ccedil;ament de C&agrave;rrega</h2>
+    </div>
+    <p class="section-help">
+        Basat en les dades dels &uacute;ltims 30 dies: patrons d'importaci&oacute; i generaci&oacute; solar per dia de la setmana i hora.
+    </p>
+
+    <div id="reco-loading" style="color: var(--muted); font-size: 0.9rem;">Carregant dades...</div>
+</div>
+
+<div id="reco-content" style="display:none;">
+
+    <!-- KPI cards -->
+    <div class="section">
+        <div class="kpi-row" id="reco-kpis">
+            <div class="kpi-card">
+                <div class="label">Importaci&oacute; total (30d)</div>
+                <div class="value val-red">
+                    <span id="reco-total-import">--</span>
+                    <span class="unit">kWh</span>
+                </div>
+            </div>
+            <div class="kpi-card">
+                <div class="label">Potencial despla&ccedil;able</div>
+                <div class="description">Import durant hores amb excedent solar</div>
+                <div class="value val-blue">
+                    <span id="reco-shiftable">--</span>
+                    <span class="unit">kWh</span>
+                </div>
+            </div>
+            <div class="kpi-card">
+                <div class="label">Estalvi (20% shift)</div>
+                <div class="description">Estimaci&oacute; mensual</div>
+                <div class="value val-green">
+                    <span id="reco-savings-20">--</span>
+                    <span class="unit">&euro;/mes</span>
+                </div>
+            </div>
+            <div class="kpi-card">
+                <div class="label">Tarifa mitjana</div>
+                <div class="description">Preu indexat ponderat per import</div>
+                <div class="value val-navy">
+                    <span id="reco-avg-rate">--</span>
+                    <span class="unit">&euro;/kWh</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="martini-stripe-thin" style="margin-bottom: 1.5rem;"></div>
+
+    <!-- Heatmap: import -->
+    <div class="section">
+        <div class="section-header">
+            <span class="icon">&#128293;</span>
+            <h2>Mapa de calor: Importaci&oacute; (kWh/h)</h2>
+        </div>
+        <div style="overflow-x:auto;">
+            <table class="heatmap-table" id="heatmap-import"></table>
+        </div>
+    </div>
+
+    <div class="martini-stripe-thin" style="margin-bottom: 1.5rem;"></div>
+
+    <!-- Heatmap: generation -->
+    <div class="section">
+        <div class="section-header">
+            <span class="icon">&#9728;</span>
+            <h2>Mapa de calor: Generaci&oacute; solar (kWh/h)</h2>
+        </div>
+        <div style="overflow-x:auto;">
+            <table class="heatmap-table" id="heatmap-gen"></table>
+        </div>
+    </div>
+
+    <div class="martini-stripe-thin" style="margin-bottom: 1.5rem;"></div>
+
+    <!-- Shift scenarios -->
+    <div class="section">
+        <div class="section-header">
+            <span class="icon">&#128200;</span>
+            <h2>Escenaris de Despla&ccedil;ament</h2>
+        </div>
+        <div style="overflow-x:auto;">
+            <table class="data-table" id="shift-table">
+                <thead>
+                    <tr>
+                        <th>% despla&ccedil;at</th>
+                        <th>kWh despla&ccedil;ats</th>
+                        <th>Estalvi mensual (&euro;)</th>
+                    </tr>
+                </thead>
+                <tbody id="shift-tbody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="martini-stripe-thin" style="margin-bottom: 1.5rem;"></div>
+
+    <!-- Recommendations -->
+    <div class="section">
+        <div class="section-header">
+            <span class="icon">&#128172;</span>
+            <h2>Recomanacions</h2>
+        </div>
+        <ul class="reco-list" id="reco-list"></ul>
+    </div>
+
+    <div class="martini-stripe-thin" style="margin-bottom: 1.5rem;"></div>
+
+    <!-- Dynamic Analysis -->
+    <div class="section">
+        <div class="section-header">
+            <span class="icon">&#128218;</span>
+            <h2>An&agrave;lisi</h2>
+        </div>
+        <div class="settings-card" style="padding: 1.5rem;">
+            <p id="reco-analysis" style="font-size: 0.92rem; line-height: 1.75; margin: 0; color: var(--text); text-align: justify;">--</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/recomanacions.js') }}"></script>
+{% endblock %}

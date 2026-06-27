@@ -1,0 +1,236 @@
+{% extends "base.html" %}
+{% block title %}Vehicle Solar{% endblock %}
+
+{% block header_right %}
+<span>Vehicle El&egrave;ctric &mdash; Solar a Casa (V2H + Aerot&egrave;rmia)</span>
+{% endblock %}
+
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+{% endblock %}
+
+{% block content %}
+
+<!-- Loading state -->
+<div id="ev-loading" style="text-align:center; padding:3rem; color:var(--muted);">
+    Carregant dades del vehicle solar...
+</div>
+
+<div id="ev-disabled" style="display:none; text-align:center; padding:3rem; color:var(--muted);">
+    <p>El m&ograve;dul Vehicle El&egrave;ctric est&agrave; desactivat.</p>
+    <p>Activa'l a <a href="{{ url_for('configuracio') }}">Configuraci&oacute;</a>.</p>
+</div>
+
+<div id="ev-content" style="display:none;">
+
+<!-- Model header -->
+<div class="section">
+    <div class="section-header">
+        <span class="icon">&#9889;</span>
+        <h2 id="ev-model-title">Vehicle Solar</h2>
+    </div>
+    <p class="section-help" id="ev-flow-description">
+        Simulaci&oacute; del flux d'energia: excedent solar &rarr; EV &rarr; V2H &rarr; bateria llar &rarr; consum el&egrave;ctric + aerot&egrave;rmia.
+    </p>
+    <!-- Energy flow diagram -->
+    <div style="display:flex; align-items:center; justify-content:center; gap:0.5rem; flex-wrap:wrap; padding:0.75rem; background:var(--light-grey); border-radius:8px; font-size:0.85rem;">
+        <span style="background:#fd7e14; color:white; padding:0.3rem 0.6rem; border-radius:6px;">&#9728; Excedent solar</span>
+        <span>&rarr;</span>
+        <span style="background:var(--blue); color:white; padding:0.3rem 0.6rem; border-radius:6px;">&#128663; EV bateria</span>
+        <span>&rarr;</span>
+        <span style="background:var(--navy); color:white; padding:0.3rem 0.6rem; border-radius:6px;">&#9889; V2H</span>
+        <span>&rarr;</span>
+        <span style="background:var(--green); color:white; padding:0.3rem 0.6rem; border-radius:6px;">&#128267; Bateria llar</span>
+        <span>&rarr;</span>
+        <span style="background:#6c757d; color:white; padding:0.3rem 0.6rem; border-radius:6px;">&#127968; El&egrave;ctric nit</span>
+        <span>+</span>
+        <span id="ev-hvac-badge" style="padding:0.3rem 0.6rem; border-radius:6px; color:white;">&#127777; Aerot&egrave;rmia</span>
+    </div>
+</div>
+
+<!-- Row 1: Today KPIs -->
+<div class="section">
+    <div class="section-header">
+        <span class="icon">&#9728;</span>
+        <h2>Avui</h2>
+    </div>
+    <div class="kpi-row">
+        <div class="kpi-card">
+            <div class="label">C&agrave;rrega solar avui</div>
+            <div class="value val-blue" id="ev-today-charge">--</div>
+        </div>
+        <div class="kpi-card">
+            <div class="label">Lliurat V2H + bateria</div>
+            <div class="value val-green" id="ev-today-v2h">--</div>
+        </div>
+        <div class="kpi-card">
+            <div class="label">Valor per la llar</div>
+            <div class="value val-green" id="ev-today-home-value">--</div>
+        </div>
+        <div class="kpi-card">
+            <div class="label">Benefici net avui</div>
+            <div class="value" id="ev-today-net">--</div>
+        </div>
+    </div>
+    <!-- Today energy split -->
+    <div class="kpi-row" style="margin-top: 0.75rem;">
+        <div class="kpi-card" style="min-height:auto; padding:0.8rem;">
+            <div class="label">&#127968; El&egrave;ctric nit</div>
+            <div class="value val-navy" id="ev-today-elec" style="font-size:1.3rem;">--</div>
+        </div>
+        <div class="kpi-card" style="min-height:auto; padding:0.8rem;">
+            <div class="label" id="ev-today-aero-label">&#127777; Aerot&egrave;rmia</div>
+            <div class="value val-blue" id="ev-today-aero" style="font-size:1.3rem;">--</div>
+        </div>
+        <div class="kpi-card" style="min-height:auto; padding:0.8rem;">
+            <div class="label" id="ev-today-thermal-label">&#128293; Energia t&egrave;rmica</div>
+            <div class="value" id="ev-today-thermal" style="font-size:1.3rem; color:#E63946;">--</div>
+        </div>
+        <div class="kpi-card" style="min-height:auto; padding:0.8rem;">
+            <div class="label">&#9888; Compensaci&oacute; perduda</div>
+            <div class="value val-muted" id="ev-today-lost" style="font-size:1.3rem;">--</div>
+        </div>
+    </div>
+</div>
+
+<div class="martini-stripe-thin" style="margin-bottom: 1.5rem;"></div>
+
+<!-- Row 2: Hourly chart -->
+<div class="section">
+    <div class="section-header">
+        <span class="icon">&#128202;</span>
+        <h2>C&agrave;rrega Solar per Hora (Avui)</h2>
+    </div>
+    <div class="chart-wrap">
+        <div style="height: 300px;">
+            <canvas id="chart-ev-hourly"></canvas>
+        </div>
+    </div>
+</div>
+
+<div class="martini-stripe-thin" style="margin-bottom: 1.5rem;"></div>
+
+<!-- Row 3: Monthly KPIs -->
+<div class="section">
+    <div class="section-header">
+        <span class="icon">&#128197;</span>
+        <h2>Resum Mensual</h2>
+    </div>
+    <div class="kpi-row">
+        <div class="kpi-card">
+            <div class="label">Solar carregat</div>
+            <div class="value val-blue" id="ev-month-charge">--</div>
+            <div class="kpi-pct val-muted" id="ev-month-days">--</div>
+        </div>
+        <div class="kpi-card">
+            <div class="label">V2H + bateria llar</div>
+            <div class="value val-green" id="ev-month-v2h">--</div>
+        </div>
+        <div class="kpi-card">
+            <div class="label">Estalvi total llar</div>
+            <div class="value val-green" id="ev-month-savings">--</div>
+        </div>
+        <div class="kpi-card">
+            <div class="label">Benefici net mensual</div>
+            <div class="value" id="ev-month-net">--</div>
+        </div>
+    </div>
+    <!-- Monthly energy split -->
+    <div class="kpi-row" style="margin-top: 0.75rem;">
+        <div class="kpi-card" style="min-height:auto; padding:0.8rem;">
+            <div class="label">&#127968; El&egrave;ctric nit total</div>
+            <div class="value val-navy" id="ev-month-elec" style="font-size:1.3rem;">--</div>
+        </div>
+        <div class="kpi-card" style="min-height:auto; padding:0.8rem;">
+            <div class="label" id="ev-month-aero-label">&#127777; Aerot&egrave;rmia total</div>
+            <div class="value val-blue" id="ev-month-aero" style="font-size:1.3rem;">--</div>
+        </div>
+        <div class="kpi-card" style="min-height:auto; padding:0.8rem;">
+            <div class="label" id="ev-month-thermal-label">&#128293; Energia t&egrave;rmica total</div>
+            <div class="value" id="ev-month-thermal" style="font-size:1.3rem; color:#E63946;">--</div>
+        </div>
+        <div class="kpi-card" style="min-height:auto; padding:0.8rem;">
+            <div class="label">&#9888; Compensaci&oacute; perduda</div>
+            <div class="value val-muted" id="ev-month-lost" style="font-size:1.3rem;">--</div>
+        </div>
+    </div>
+</div>
+
+<div class="martini-stripe-thin" style="margin-bottom: 1.5rem;"></div>
+
+<!-- Row 4: Daily chart (stacked) -->
+<div class="section">
+    <div class="section-header">
+        <span class="icon">&#128200;</span>
+        <h2>Evoluci&oacute; Di&agrave;ria</h2>
+    </div>
+    <div class="chart-wrap">
+        <div style="height: 350px;">
+            <canvas id="chart-ev-daily"></canvas>
+        </div>
+    </div>
+</div>
+
+<div class="martini-stripe-thin" style="margin-bottom: 1.5rem;"></div>
+
+<!-- Row 5: ROI & Projection -->
+<div class="section">
+    <div class="section-header">
+        <span class="icon">&#128176;</span>
+        <h2>Projecci&oacute; i ROI</h2>
+    </div>
+    <div class="kpi-row">
+        <div class="kpi-card">
+            <div class="label">Estalvi anual projectat</div>
+            <div class="value val-green" id="ev-annual-savings">--</div>
+        </div>
+        <div class="kpi-card">
+            <div class="label">Benefici net anual</div>
+            <div class="value" id="ev-annual-net">--</div>
+        </div>
+        <div class="kpi-card">
+            <div class="label">Payback carregador V2H</div>
+            <div class="value val-navy" id="ev-payback">--</div>
+        </div>
+        <div class="kpi-card">
+            <div class="label">Cobertura energ&egrave;tica llar</div>
+            <div class="value val-blue" id="ev-coverage">--</div>
+        </div>
+    </div>
+    <div class="kpi-row" style="margin-top: 0.75rem;">
+        <div class="kpi-card" style="min-height:auto; padding:0.8rem;">
+            <div class="label" id="ev-thermal-day-label">&#128293; Energia t&egrave;rmica mitjana/dia</div>
+            <div class="value" id="ev-thermal-day" style="font-size:1.3rem; color:#E63946;">--</div>
+        </div>
+        <div class="kpi-card" style="min-height:auto; padding:0.8rem;">
+            <div class="label" id="ev-hvac-hours-label">&#127777; Hores HVAC/nit</div>
+            <div class="value val-blue" id="ev-hvac-hours" style="font-size:1.3rem;">--</div>
+        </div>
+        <div class="kpi-card" style="min-height:auto; padding:0.8rem; grid-column: span 2;">
+            <div class="label">&#9889; Temporada actual</div>
+            <div class="value val-navy" id="ev-season" style="font-size:1.3rem;">--</div>
+            <div class="kpi-pct val-muted" id="ev-cop-info">--</div>
+        </div>
+    </div>
+</div>
+
+<div class="martini-stripe-thin" style="margin-bottom: 1.5rem;"></div>
+
+<!-- Analysis & Recommendation -->
+<div class="section">
+    <div class="section-header">
+        <span class="icon">&#128218;</span>
+        <h2>An&agrave;lisi</h2>
+    </div>
+    <div class="settings-card" style="padding: 1.5rem;">
+        <p id="ev-analysis" style="font-size: 0.92rem; line-height: 1.75; margin: 0; color: var(--text); text-align: justify;">--</p>
+    </div>
+</div>
+
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/vehicle_solar.js') }}"></script>
+{% endblock %}

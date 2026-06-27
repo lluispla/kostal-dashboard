@@ -1,0 +1,219 @@
+{% extends "base.html" %}
+{% block title %}Amortitzaci&oacute;{% endblock %}
+
+{% block header_right %}
+<span>Seguiment d'Amortitzaci&oacute; &mdash; Planta Solar 65 kWp</span>
+{% endblock %}
+
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3"></script>
+{% endblock %}
+
+{% block content %}
+
+<!-- Loading state -->
+<div id="amort-loading" style="text-align:center; padding:3rem; color:var(--muted);">
+    Carregant dades d'amortitzaci&oacute;...
+</div>
+
+<div id="amort-content" style="display:none;">
+
+<!-- Shared KPIs -->
+<div class="section">
+    <div class="section-header">
+        <span class="icon">&#128200;</span>
+        <h2>Amortitzaci&oacute; de la Instal&middot;laci&oacute;</h2>
+    </div>
+
+    <div class="kpi-row">
+        <div class="kpi-card">
+            <div class="label">Cost instal&middot;laci&oacute;</div>
+            <div class="value val-navy" id="amort-cost">--</div>
+            <div class="kpi-pct val-muted" id="amort-date">--</div>
+        </div>
+        <div class="kpi-card">
+            <div class="label">Generaci&oacute; total</div>
+            <div class="value val-blue" id="amort-gen">--</div>
+            <div class="kpi-pct val-muted" id="amort-months">--</div>
+        </div>
+        <div class="kpi-card" style="grid-column: span 2; background: var(--light-grey);">
+            <div class="label" style="font-size: 0.8rem;">Nota</div>
+            <p style="font-size: 0.82rem; color: var(--muted); line-height: 1.5; text-align: left; margin: 0.5rem 0 0;">
+                Tres perspectives: <strong style="color: var(--red);">vs Factures Reals</strong> (qu&egrave; pagaves amb Iberdrola sense solar vs qu&egrave; pagues ara &mdash; solar + canvi tarifa),
+                <strong style="color: var(--green);">vs Iberdrola Fix</strong> (nom&eacute;s l'estalvi dels panells solars a tarifa fixa)
+                i <strong style="color: var(--blue);">vs Indexada Actual</strong> (nom&eacute;s l'estalvi solar a tarifa indexada).
+                La projecci&oacute; millorar&agrave; amb m&eacute;s dades, especialment a l'estiu.
+            </p>
+        </div>
+    </div>
+</div>
+
+<div class="martini-stripe-thin" style="margin-bottom: 1.5rem;"></div>
+
+<!-- Dual perspective KPIs -->
+<div class="section">
+    <div class="section-header">
+        <span class="icon">&#9889;</span>
+        <h2>Comparativa d'Estalvi</h2>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1.5rem;">
+        <!-- vs Real Iberdrola invoices (the full picture) -->
+        <div style="border: 2px solid var(--red); border-radius: 12px; padding: 1.25rem;">
+            <h3 style="color: var(--red); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 1rem; text-align: center;">
+                vs Factures Reals Iberdrola
+            </h3>
+            <div class="kpi-grid" style="grid-template-columns: 1fr 1fr;">
+                <div class="kpi-card" style="min-height: auto; padding: 1rem;">
+                    <div class="label">Estalvi total</div>
+                    <div class="value val-red" id="amort-savings-real" style="font-size: 1.6rem;">--</div>
+                </div>
+                <div class="kpi-card" style="min-height: auto; padding: 1rem;">
+                    <div class="label">% Amortitzat</div>
+                    <div class="value val-red" id="amort-pct-real" style="font-size: 1.6rem;">--</div>
+                </div>
+                <div class="kpi-card" style="min-height: auto; padding: 1rem;">
+                    <div class="label">Estalvi mensual</div>
+                    <div class="value val-red" id="amort-monthly-real" style="font-size: 1.4rem;">--</div>
+                </div>
+                <div class="kpi-card" style="min-height: auto; padding: 1rem;">
+                    <div class="label">Data payback</div>
+                    <div class="value val-red" id="amort-payback-real" style="font-size: 1.3rem;">--</div>
+                </div>
+            </div>
+            <div class="payback-bar-wrap" style="margin: 0.75rem 0 0;">
+                <div class="payback-bar-fill" id="amort-bar-real" style="width: 0%; background: linear-gradient(90deg, var(--red), #c0392b);">
+                    <span id="amort-bar-text-real"></span>
+                </div>
+            </div>
+            <div style="font-size: 0.72rem; color: var(--muted); margin-top: 0.5rem; text-align: center;">
+                Compara factura actual (Som+solar) vs <span id="amort-iber-avg">--</span>&euro;/mes reals
+            </div>
+        </div>
+
+        <!-- vs Iberdrola (old contract) -->
+        <div style="border: 2px solid var(--green); border-radius: 12px; padding: 1.25rem;">
+            <h3 style="color: var(--green); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 1rem; text-align: center;">
+                vs Iberdrola Fix (nom&eacute;s solar)
+            </h3>
+            <div class="kpi-grid" style="grid-template-columns: 1fr 1fr;">
+                <div class="kpi-card" style="min-height: auto; padding: 1rem;">
+                    <div class="label">Estalvi total</div>
+                    <div class="value val-green" id="amort-savings-iber" style="font-size: 1.6rem;">--</div>
+                </div>
+                <div class="kpi-card" style="min-height: auto; padding: 1rem;">
+                    <div class="label">% Amortitzat</div>
+                    <div class="value val-green" id="amort-pct-iber" style="font-size: 1.6rem;">--</div>
+                </div>
+                <div class="kpi-card" style="min-height: auto; padding: 1rem;">
+                    <div class="label">Estalvi mensual</div>
+                    <div class="value val-green" id="amort-monthly-iber" style="font-size: 1.4rem;">--</div>
+                </div>
+                <div class="kpi-card" style="min-height: auto; padding: 1rem;">
+                    <div class="label">Data payback</div>
+                    <div class="value val-green" id="amort-payback-iber" style="font-size: 1.3rem;">--</div>
+                </div>
+            </div>
+            <div class="payback-bar-wrap" style="margin: 0.75rem 0 0;">
+                <div class="payback-bar-fill" id="amort-bar-iber" style="width: 0%; background: linear-gradient(90deg, var(--green), #5cb85c);">
+                    <span id="amort-bar-text-iber"></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- vs Indexed (current tariff) -->
+        <div style="border: 2px solid var(--blue); border-radius: 12px; padding: 1.25rem;">
+            <h3 style="color: var(--blue); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 1rem; text-align: center;">
+                vs Indexada Actual (nom&eacute;s solar)
+            </h3>
+            <div class="kpi-grid" style="grid-template-columns: 1fr 1fr;">
+                <div class="kpi-card" style="min-height: auto; padding: 1rem;">
+                    <div class="label">Estalvi total</div>
+                    <div class="value val-blue" id="amort-savings-idx" style="font-size: 1.6rem;">--</div>
+                </div>
+                <div class="kpi-card" style="min-height: auto; padding: 1rem;">
+                    <div class="label">% Amortitzat</div>
+                    <div class="value val-blue" id="amort-pct-idx" style="font-size: 1.6rem;">--</div>
+                </div>
+                <div class="kpi-card" style="min-height: auto; padding: 1rem;">
+                    <div class="label">Estalvi mensual</div>
+                    <div class="value val-blue" id="amort-monthly-idx" style="font-size: 1.4rem;">--</div>
+                </div>
+                <div class="kpi-card" style="min-height: auto; padding: 1rem;">
+                    <div class="label">Data payback</div>
+                    <div class="value val-blue" id="amort-payback-idx" style="font-size: 1.3rem;">--</div>
+                </div>
+            </div>
+            <div class="payback-bar-wrap" style="margin: 0.75rem 0 0;">
+                <div class="payback-bar-fill" id="amort-bar-idx" style="width: 0%; background: linear-gradient(90deg, var(--blue), var(--navy));">
+                    <span id="amort-bar-text-idx"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="martini-stripe-thin" style="margin-bottom: 1.5rem;"></div>
+
+<!-- Chart -->
+<div class="section">
+    <div class="section-header">
+        <span class="icon">&#128202;</span>
+        <h2>Estalvi Mensual i Acumulat</h2>
+    </div>
+    <div class="amort-chart-wrap">
+        <div class="chart-wrap">
+            <div style="height: 350px;">
+                <canvas id="chart-amort"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Monthly table -->
+<div class="section">
+    <div class="section-header">
+        <span class="icon">&#128196;</span>
+        <h2>Detall Mensual</h2>
+    </div>
+    <div style="overflow-x: auto;">
+        <table class="analysis-table" id="amort-table">
+            <thead>
+                <tr>
+                    <th>Mes</th>
+                    <th style="text-align:right">Dies</th>
+                    <th style="text-align:right">Gen. (kWh)</th>
+                    <th style="text-align:right; color: var(--red);">Factura real (&euro;)</th>
+                    <th style="text-align:right; color: var(--red);">Estalvi real (&euro;)</th>
+                    <th style="text-align:right; color: var(--red);">Acum. real (&euro;)</th>
+                    <th style="text-align:right; color: var(--green);">Estalvi Iber (&euro;)</th>
+                    <th style="text-align:right; color: var(--blue);">Estalvi Idx (&euro;)</th>
+                </tr>
+            </thead>
+            <tbody id="amort-table-body">
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="martini-stripe-thin" style="margin-bottom: 1.5rem;"></div>
+
+<!-- Dynamic Analysis -->
+<div class="section">
+    <div class="section-header">
+        <span class="icon">&#128218;</span>
+        <h2>An&agrave;lisi d'Amortitzaci&oacute;</h2>
+    </div>
+    <div class="settings-card" style="padding: 1.5rem;">
+        <p id="amort-analysis" style="font-size: 0.92rem; line-height: 1.75; margin: 0; color: var(--text); text-align: justify;">--</p>
+    </div>
+</div>
+
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/amortitzacio.js') }}"></script>
+{% endblock %}

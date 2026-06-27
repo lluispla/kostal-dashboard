@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+{% block title %}MJF An&agrave;lisi Hist&ograve;rica{% endblock %}
+
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+{% endblock %}
+
+{% block content %}
+
+<h1>&#128200; MJF &mdash; An&agrave;lisi Hist&ograve;rica</h1>
+
+<div class="section" style="border-left:3px solid var(--green); padding:0.8rem 1rem; background:var(--surface); margin-bottom:1.5rem;">
+    <strong>Per a planificaci&oacute; di&agrave;ria de c&agrave;rregues d'impressi&oacute;:</strong> feu servir el
+    <a href="{{ url_for('programador') }}">&#128197; Programador</a>, que utilitza previsi&oacute; solar (Open-Meteo),
+    preu OMIE day-ahead, Art&nbsp;99.2&nbsp;IEE + IVA inclosos i el model de consum base.
+    Aquesta p&agrave;gina mant&eacute; l'an&agrave;lisi estad&iacute;stica de l'any sencer per veure tend&egrave;ncies.
+</div>
+
+<p class="section-help">An&agrave;lisi hist&ograve;rica basada en dades OMIE + KSEM reals, amb cost total de factura (IEE Art&nbsp;99.2 + IVA 21%).</p>
+
+<div id="loading" style="text-align:center; padding:3rem; color:var(--muted);">
+    <p style="font-size:1.5rem;">&#9881; Calculant optimitzaci&oacute; hist&ograve;rica...</p>
+    <p>Simulant les 24 possibles hores d'inici per cada dia hist&ograve;ric.</p>
+</div>
+
+<div id="results" hidden>
+
+<!-- Summary KPIs -->
+<div class="kpi-row" id="kpi-summary">
+    <div class="kpi-card">
+        <div class="label">Dies analitzats</div>
+        <div class="value val-navy"><span id="kpi-days">--</span></div>
+    </div>
+    <div class="kpi-card">
+        <div class="label">&Ograve;ptim feiners</div>
+        <div class="value val-green"><span id="kpi-opt-wd">--</span></div>
+    </div>
+    <div class="kpi-card">
+        <div class="label">&Ograve;ptim caps de setmana</div>
+        <div class="value val-green"><span id="kpi-opt-we">--</span></div>
+    </div>
+    <div class="kpi-card">
+        <div class="label">Estalvi vs 22:00 (feiners)</div>
+        <div class="value val-blue"><span id="kpi-saving-wd">--</span><span class="unit">&euro;/treball</span></div>
+    </div>
+    <div class="kpi-card">
+        <div class="label">Estalvi vs 22:00 (caps setm.)</div>
+        <div class="value val-blue"><span id="kpi-saving-we">--</span><span class="unit">&euro;/treball</span></div>
+    </div>
+</div>
+
+<!-- Charts -->
+<div class="section">
+    <h2>Cost per treball segons hora d'inici</h2>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:1.5rem;">
+        <div class="historic-chart-wrap" style="height:350px;">
+            <h3>Feiners (Dl-Dv)</h3>
+            <canvas id="chart-weekday"></canvas>
+        </div>
+        <div class="historic-chart-wrap" style="height:350px;">
+            <h3>Caps de setmana (Ds-Dg)</h3>
+            <canvas id="chart-weekend"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- Win distribution -->
+<div class="section">
+    <h2>Distribuci&oacute; de victòries (quantes vegades cada hora &eacute;s la m&eacute;s barata)</h2>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:1.5rem;">
+        <div class="historic-chart-wrap" style="height:300px;">
+            <h3>Feiners</h3>
+            <canvas id="chart-wins-wd"></canvas>
+        </div>
+        <div class="historic-chart-wrap" style="height:300px;">
+            <h3>Caps de setmana</h3>
+            <canvas id="chart-wins-we"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- Detailed tables -->
+<div class="section">
+    <h2>Taula detallada &mdash; Feiners</h2>
+    <div style="overflow-x:auto;">
+        <table class="data-table" id="table-weekday">
+            <thead>
+                <tr>
+                    <th>Inici</th>
+                    <th>Cost mitj&agrave; (&euro;)</th>
+                    <th>Mediana</th>
+                    <th>Std</th>
+                    <th>P5</th>
+                    <th>P95</th>
+                    <th>IC 95%</th>
+                    <th>Vict&ograve;ries</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+</div>
+
+<div class="section">
+    <h2>Taula detallada &mdash; Caps de setmana</h2>
+    <div style="overflow-x:auto;">
+        <table class="data-table" id="table-weekend">
+            <thead>
+                <tr>
+                    <th>Inici</th>
+                    <th>Cost mitj&agrave; (&euro;)</th>
+                    <th>Mediana</th>
+                    <th>Std</th>
+                    <th>P5</th>
+                    <th>P95</th>
+                    <th>IC 95%</th>
+                    <th>Vict&ograve;ries</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Monthly breakdown -->
+<div class="section">
+    <h2>Desglossament mensual</h2>
+    <div style="overflow-x:auto;">
+        <table class="data-table" id="table-monthly">
+            <thead><tr><th>Mes</th></tr></thead>
+            <tbody></tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Methodology -->
+<div class="section" style="margin-top:2rem; padding:1rem; background:var(--surface); border-radius:8px;">
+    <h3>Metodologia</h3>
+    <ul style="font-size:0.85rem; color:var(--muted); line-height:1.6;">
+        <li>Simulaci&oacute; de treballs MJF de 12h amb consum estimat de <span id="info-kw">18</span> kW (calibrat: <span id="info-cal">1.115</span>x = <span id="info-cal-kw">20.1</span> kWh/h equivalent comptador)</li>
+        <li>Preus OMIE reals horaris + f&oacute;rmula completa Som Energia Indexada (OMIE + p&egrave;rdues + marge + peatges + c&agrave;rrecs) + Art&nbsp;99.2&nbsp;IEE (0.001&nbsp;&euro;/kWh) + IVA&nbsp;21%</li>
+        <li>Per&iacute;odes 3.0TD amb rotaci&oacute; mensual (Circular 3/2020 CNMC Peninsular)</li>
+        <li>Consum base (no-MJF) pres del model de consum (<a href="{{ url_for('consum_model') }}">Model Consum</a>) &mdash; mediana hist&ograve;rica per dia de la setmana &times; hora, amb fallback din&agrave;mic dia/nit si no hi ha prou mostres</li>
+        <li>Solar din&agrave;mica: inversor modula segons demanda (throttle 40 kW), factors de capacitat mensuals mesurats (Feb-Mar 2026) escalats per altres mesos</li>
+        <li>Rang de dades: <span id="info-range">--</span> (<span id="info-days">--</span> dies complets)</li>
+    </ul>
+</div>
+
+</div><!-- /results -->
+
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/optimitzador.js') }}"></script>
+{% endblock %}
