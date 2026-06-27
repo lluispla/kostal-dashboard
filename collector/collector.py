@@ -1,5 +1,6 @@
 import os
 import struct
+import sys
 import time
 import logging
 import threading
@@ -8,9 +9,14 @@ from zoneinfo import ZoneInfo
 
 import requests
 import schedule
+import urllib3
 from pymodbus.client import ModbusTcpClient
 from influxdb_client import InfluxDBClient, Point
 from influxdb_client.client.write_api import SYNCHRONOUS
+
+
+class _InfluxUnreachable(Exception):
+    """Raised when an InfluxDB write fails due to a connection error."""
 
 logging.basicConfig(
     level=logging.INFO,
@@ -39,6 +45,31 @@ INFLUXDB_BUCKET = os.environ["INFLUXDB_BUCKET"]
 # ---------------------------------------------------------------------------
 
 TELEGRAM_API = "https://api.telegram.org/bot{token}/sendMessage"
+TELEGRAM_GETME = "https://api.telegram.org/bot{token}/getMe"
+
+
+def verify_telegram_token():
+    """Call getMe to check that the bot token is live. Returns True if valid."""
+    if not TELEGRAM_BOT_TOKEN:
+        return False
+    try:
+        resp = requests.get(
+            TELEGRAM_GETME.format(token=TELEGRAM_BOT_TOKEN), timeout=10,
+        )
+        if resp.status_code == 200:
+            return True
+        log.error(
+            "[Telegram] ================================================\n"
+            "[Telegram] TOKEN INVALID — alerts disabled (status %d)\n"
+            "[Telegram] Fix: open @BotFather → /mybots → API Token → copy\n"
+            "[Telegram] then update TELEGRAM_BOT_TOKEN in .env and\n"
+            "[Telegram] run: docker compose restart collector\n"
+            "[Telegram] ================================================",
+            resp.status_code,
+        )
+    except Exception as e:
+        log.error("[Telegram] getMe failed: %s — alerts disabled", e)
+    return False
 
 
 def send_telegram(message):
@@ -81,6 +112,7 @@ class DeviceTracker:
         self.alerted[device] = False
         self.was_online[device] = True
         if was_down:
+            log.warning("[%s] RECOVERED — device back online", device)
             send_telegram(f"<b>RECUPERAT</b> {device}\nTorna a estar en línia.")
 
     def report_fail(self, device, is_inverter=False):
@@ -91,6 +123,11 @@ class DeviceTracker:
         count = self.fail_counts[device]
         if count >= self.threshold and not self.alerted.get(device, False):
             minutes = count * POLL_INTERVAL // 60
+            # Log at WARNING so the outage is visible even if Telegram is down.
+            log.warning(
+                "[%s] UNREACHABLE for ~%d min (%d consecutive failed polls)",
+                device, minutes, count,
+            )
             send_telegram(
                 f"<b>ALERTA</b> {device}\n"
                 f"No respon des de fa ~{minutes} min ({count} intents fallits)."
@@ -290,21 +327,45 @@ def _read_uint16(client, register):
     return result.registers[0]
 
 
+_last_yield_total = None  # monotonic guard across polls
+
+
 def _read_sunspec_energy(client):
-    """Read SunSpec lifetime AC energy (uint32 + SF) at regs 40092-40094, return kWh."""
-    result = client.read_holding_registers(40092, count=3)
-    if result.isError():
+    """Read SunSpec lifetime AC energy (uint32 + SF) at regs 40092-40094, return kWh.
+
+    The 32-bit register pair can produce torn reads when the inverter
+    increments the counter between the two 16-bit halves — observed as
+    spurious low-word-only values (~65 kWh) and ±200 kWh jitter on a real
+    ~65k kWh counter. Mitigation: read 3 times, reject if the readings
+    disagree by more than 1 kWh, then enforce monotonic increase.
+    """
+    global _last_yield_total
+
+    def _one_read():
+        result = client.read_holding_registers(40092, count=3)
+        if result.isError():
+            return None
+        raw = (result.registers[0] << 16) | result.registers[1]
+        if raw == 0xFFFFFFFF:  # SunSpec "not implemented"
+            return None
+        sf = struct.unpack(">h", struct.pack(">H", result.registers[2]))[0]
+        kwh = raw * (10 ** sf) / 1000.0
+        if kwh > 500000:  # garbage (inverter off, register noise)
+            return None
+        return kwh
+
+    readings = [r for r in (_one_read() for _ in range(3)) if r is not None]
+    if not readings:
         return None
-    raw = (result.registers[0] << 16) | result.registers[1]
-    if raw == 0xFFFFFFFF:  # SunSpec "not implemented"
+    if max(readings) - min(readings) > 1.0:
+        # Inconsistent snapshot — at least one half was torn this round.
         return None
-    sf_raw = result.registers[2]
-    sf = struct.unpack(">h", struct.pack(">H", sf_raw))[0]
-    wh = raw * (10 ** sf)
-    kwh = wh / 1000.0
-    # Reject garbage readings when inverter is off (real value ~65k kWh)
-    if kwh > 500000:
-        return None
+
+    kwh = sorted(readings)[len(readings) // 2]
+
+    if _last_yield_total is not None and kwh < _last_yield_total:
+        return None  # lifetime counter cannot decrease
+    _last_yield_total = kwh
     return kwh
 
 
@@ -816,21 +877,52 @@ def main():
     log.info("National weather collector enabled (6h interval, %d regions)", len(WEATHER_REGIONS))
 
     # Start daily summary thread
-    if TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID:
+    if TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID and verify_telegram_token():
         summary = threading.Thread(target=_daily_summary_thread, args=(query_api,), daemon=True)
         summary.start()
         log.info("Telegram alerts enabled (threshold: %d failures)", ALERT_FAIL_THRESHOLD)
         send_telegram("<b>COLLECTOR INICIAT</b>\nEl col·lector de dades s'ha engegat.")
     else:
-        log.info("Telegram alerts disabled (set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID)")
+        log.info("Telegram alerts disabled (missing creds or token invalid)")
+
+    # If InfluxDB writes fail this many times in a row, exit non-zero so
+    # Docker restarts us — clears stale DNS / urllib3 pool on network blips.
+    INFLUX_FAIL_LIMIT = 10
+    influx_fail_streak = 0
+
+    def _write_influx(point):
+        """Write a point; on connection/DNS errors raise InfluxUnreachable.
+        Other exceptions propagate as before (treated as device-side errors).
+        """
+        nonlocal influx_fail_streak
+        try:
+            write_api.write(bucket=INFLUXDB_BUCKET, record=point)
+            influx_fail_streak = 0
+        except (
+            urllib3.exceptions.NameResolutionError,
+            urllib3.exceptions.MaxRetryError,
+            requests.exceptions.ConnectionError,
+        ) as e:
+            influx_fail_streak += 1
+            log.error("InfluxDB write failed (%d/%d): %s",
+                      influx_fail_streak, INFLUX_FAIL_LIMIT, e)
+            if influx_fail_streak >= INFLUX_FAIL_LIMIT:
+                log.critical(
+                    "InfluxDB unreachable for %d consecutive writes — exiting "
+                    "to let Docker restart the container", influx_fail_streak,
+                )
+                sys.exit(1)
+            raise _InfluxUnreachable() from e
 
     while True:
         # --- PIKO 15 ---
         try:
             point = poll_piko15()
-            write_api.write(bucket=INFLUXDB_BUCKET, record=point)
+            _write_influx(point)
             log.info("PIKO 15 data written")
             tracker.report_ok("PIKO 15")
+        except _InfluxUnreachable:
+            pass  # already logged; keep loop alive until exit threshold
         except requests.exceptions.ConnectionError:
             log.debug("PIKO 15 unreachable (likely night time)")
             tracker.report_fail("PIKO 15", is_inverter=True)
@@ -843,12 +935,14 @@ def main():
             try:
                 point = poll_piko_ci()
                 if point is not None:
-                    write_api.write(bucket=INFLUXDB_BUCKET, record=point)
+                    _write_influx(point)
                     log.info("PIKO CI data written")
                     tracker.report_ok("PIKO CI 50")
                 else:
                     log.debug("PIKO CI 50 unreachable (likely night time)")
                     tracker.report_fail("PIKO CI 50", is_inverter=True)
+            except _InfluxUnreachable:
+                pass
             except Exception:
                 log.exception("Error polling PIKO CI 50")
                 tracker.report_fail("PIKO CI 50", is_inverter=True)
@@ -858,12 +952,14 @@ def main():
             try:
                 point = poll_ksem()
                 if point is not None:
-                    write_api.write(bucket=INFLUXDB_BUCKET, record=point)
+                    _write_influx(point)
                     log.info("KSEM data written")
                     tracker.report_ok("KSEM")
                 else:
                     log.debug("KSEM unreachable")
                     tracker.report_fail("KSEM", is_inverter=False)
+            except _InfluxUnreachable:
+                pass
             except Exception:
                 log.exception("Error polling KSEM")
                 tracker.report_fail("KSEM", is_inverter=False)
