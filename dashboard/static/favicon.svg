@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Solar panel -->
+  <rect x="8" y="16" width="48" height="32" rx="2" fill="#1a73e8" stroke="#0d47a1" stroke-width="1.5" transform="rotate(-10 32 32)"/>
+  <!-- Grid lines horizontal -->
+  <line x1="10" y1="26" x2="54" y2="18.8" stroke="#4fc3f7" stroke-width="0.8" transform="rotate(-10 32 32)"/>
+  <line x1="10" y1="37" x2="54" y2="29.8" stroke="#4fc3f7" stroke-width="0.8" transform="rotate(-10 32 32)"/>
+  <!-- Grid lines vertical -->
+  <line x1="20" y1="17.5" x2="20" y2="46.5" stroke="#4fc3f7" stroke-width="0.8" transform="rotate(-10 32 32)"/>
+  <line x1="32" y1="17.5" x2="32" y2="46.5" stroke="#4fc3f7" stroke-width="0.8" transform="rotate(-10 32 32)"/>
+  <line x1="44" y1="17.5" x2="44" y2="46.5" stroke="#4fc3f7" stroke-width="0.8" transform="rotate(-10 32 32)"/>
+  <!-- Sun rays -->
+  <circle cx="52" cy="10" r="6" fill="#ffc107"/>
+  <line x1="52" y1="1" x2="52" y2="4" stroke="#ffc107" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="59" y1="3" x2="57.5" y2="5.5" stroke="#ffc107" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="61" y1="10" x2="58" y2="10" stroke="#ffc107" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="45" y1="3" x2="46.5" y2="5.5" stroke="#ffc107" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="43" y1="10" x2="46" y2="10" stroke="#ffc107" stroke-width="1.5" stroke-linecap="round"/>
+  <!-- Stand -->
+  <line x1="32" y1="50" x2="32" y2="60" stroke="#555" stroke-width="2.5" stroke-linecap="round"/>
+  <line x1="24" y1="60" x2="40" y2="60" stroke="#555" stroke-width="2.5" stroke-linecap="round"/>
+</svg>

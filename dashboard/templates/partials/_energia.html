@@ -1,47 +1,11 @@
-<!-- Energia — 4 KPI cards + power curve + daily yield chart -->
+<!-- Energia — energy breakdown cards + voltage + daily yield chart -->
 <div class="section">
     <div class="section-header">
         <span class="icon">&#9889;</span>
         <h2>Energia</h2>
     </div>
 
-    <!-- Row 1 — Potència en temps real -->
-    <div class="kpi-row">
-        <div class="kpi-card">
-            <div class="label">Generació planta ara</div>
-            <div class="description">Potència AC total dels dos inversors (PIKO 15 + CI 50)</div>
-            <div class="value val-blue">
-                <span data-field="energia.plant_power_w" data-fmt="0">{{ "%.0f"|format(d.energia.plant_power_w) }}</span>
-                <span class="unit">W</span>
-            </div>
-        </div>
-        <div class="kpi-card">
-            <div class="label">Consum negoci ara</div>
-            <div class="description">Potència consumida al local (autoconsum + xarxa)</div>
-            <div class="value val-navy">
-                <span data-field="energia.consumption_w" data-fmt="0">{{ "%.0f"|format(d.energia.consumption_w) }}</span>
-                <span class="unit">W</span>
-            </div>
-        </div>
-        <div class="kpi-card">
-            <div class="label">Flux xarxa ara</div>
-            <div class="description">Positiu = important de xarxa, negatiu = exportant excedent</div>
-            <div class="value {% if d.energia.grid_flow_w >= 0 %}val-red{% else %}val-green{% endif %}">
-                <span data-field="energia.grid_flow_w" data-fmt="0">{{ "%.0f"|format(d.energia.grid_flow_w) }}</span>
-                <span class="unit">W</span>
-            </div>
-        </div>
-        <div class="kpi-card">
-            <div class="label">Taxa autoconsum avui</div>
-            <div class="description">Percentatge d'energia solar consumida localment</div>
-            <div class="value val-blue">
-                <span data-field="energia.self_consumption_rate" data-fmt="1">{{ "%.1f"|format(d.energia.self_consumption_rate) }}</span>
-                <span class="unit">%</span>
-            </div>
-        </div>
-    </div>
-
-    <!-- Row 2 — Energia avui (consum breakdown) -->
+    <!-- Row 1 — Energia avui (consum breakdown) -->
     <div class="kpi-row">
         <div class="kpi-card">
             <div class="label">Consum total avui</div>
@@ -83,33 +47,44 @@
         </div>
     </div>
 
-    <!-- EMA toggle for power charts -->
-    <div style="margin-bottom: 0.75rem;">
-        <button class="range-btn" id="dash-toggle-ema" onclick="this.classList.toggle('active'); toggleDashEma();">EMA</button>
+    <!-- Row 3 — Solar forecast + lost production -->
+    <div class="kpi-row">
+        <div class="kpi-card">
+            <div class="label">Previsi&oacute; solar avui</div>
+            <div class="description">Open-Meteo irradi&agrave;ncia &times; 65 kWp (L'Escala)</div>
+            <div class="value val-yellow">
+                <span data-field="forecast.total_today_kwh" data-fmt="1">{{ "%.1f"|format(d.forecast.total_today_kwh) }}</span>
+                <span class="unit">kWh</span>
+            </div>
+        </div>
+        <div class="kpi-card">
+            <div class="label">Previsi&oacute; solar dem&agrave;</div>
+            <div class="description">Producci&oacute; esperada per dem&agrave;</div>
+            <div class="value val-yellow">
+                <span data-field="forecast.total_tomorrow_kwh" data-fmt="1">{{ "%.1f"|format(d.forecast.total_tomorrow_kwh) }}</span>
+                <span class="unit">kWh</span>
+            </div>
+        </div>
+        <div class="kpi-card">
+            <div class="label">Producci&oacute; perduda avui</div>
+            <div class="description">Potencial no produ&iuml;t (sense abocament a xarxa)</div>
+            <div class="value val-red">
+                <span data-field="lost_production.lost_today_kwh" data-fmt="1">{{ "%.1f"|format(d.lost_production.lost_today_kwh) }}</span>
+                <span class="unit">kWh</span>
+                <span class="unit" style="font-size:0.7rem; margin-left:0.3rem;">({{ "%.2f"|format(d.lost_production.lost_today_eur) }} &euro;)</span>
+            </div>
+        </div>
+        <div class="kpi-card">
+            <div class="label">Producci&oacute; perduda mes</div>
+            <div class="description">Acumulat {{ d.last_update[:5] }} &mdash; a preu OMIE mitjà ({{ "%.4f"|format(d.lost_production.avg_omie_eur_kwh) }} &euro;/kWh)</div>
+            <div class="value val-red">
+                <span data-field="lost_production.lost_month_kwh" data-fmt="1">{{ "%.1f"|format(d.lost_production.lost_month_kwh) }}</span>
+                <span class="unit">kWh</span>
+                <span class="unit" style="font-size:0.7rem; margin-left:0.3rem;">({{ "%.2f"|format(d.lost_production.lost_month_eur) }} &euro;)</span>
+            </div>
+        </div>
     </div>
 
-    <!-- Power curves — 3 separate charts -->
-    <div class="chart-wrap dash-chart-wrap" id="dash-wrap-gen">
-        <h3>Generació solar — avui</h3>
-        <button class="chart-btn fullscreen-btn" onclick="toggleDashFullscreen('dash-wrap-gen')">&#x26F6;</button>
-        <div style="height: 180px;">
-            <canvas id="chart-generation"></canvas>
-        </div>
-    </div>
-    <div class="chart-wrap dash-chart-wrap" id="dash-wrap-cons">
-        <h3>Consum del negoci — avui</h3>
-        <button class="chart-btn fullscreen-btn" onclick="toggleDashFullscreen('dash-wrap-cons')">&#x26F6;</button>
-        <div style="height: 180px;">
-            <canvas id="chart-consumption"></canvas>
-        </div>
-    </div>
-    <div class="chart-wrap dash-chart-wrap" id="dash-wrap-grid">
-        <h3>Flux xarxa — avui (positiu = importació, negatiu = exportació excedent)</h3>
-        <button class="chart-btn fullscreen-btn" onclick="toggleDashFullscreen('dash-wrap-grid')">&#x26F6;</button>
-        <div style="height: 180px;">
-            <canvas id="chart-grid"></canvas>
-        </div>
-    </div>
     <div class="chart-wrap dash-chart-wrap" id="dash-wrap-voltage">
         <h3>Tensió xarxa (Piko CI 50) — avui</h3>
         <button class="chart-btn fullscreen-btn" onclick="toggleDashFullscreen('dash-wrap-voltage')">&#x26F6;</button>

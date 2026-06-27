@@ -20,12 +20,14 @@ function updateFields(data) {
 }
 
 function formatValue(val, fmt) {
+    var n = Number(val);
     switch (fmt) {
-        case '0':   return Math.round(val).toLocaleString('ca');
-        case '1':   return Number(val).toFixed(1);
-        case '2':   return Number(val).toFixed(2);
-        case '4':   return Number(val).toFixed(4);
-        case '5':   return Number(val).toFixed(5);
+        case '0':   return Math.round(n).toLocaleString('ca');
+        case '1':   return n.toFixed(1);
+        case '2':   return n.toFixed(2);
+        case '4':   return n.toFixed(4);
+        case '5':   return n.toFixed(5);
+        case '+2':  return (n >= 0 ? '+' : '') + n.toFixed(2);
         default:    return val;
     }
 }
@@ -58,7 +60,7 @@ function refreshDashboard() {
 
             /* Charts */
             if (data.energia && data.energia.power_curve) {
-                updatePowerCurve(data.energia.power_curve);
+                updatePowerCurve(data.energia.power_curve, data.forecast);
             }
             if (data.energia && data.energia.daily_yield_30d) {
                 updateYield30d(data.energia.daily_yield_30d);
@@ -78,6 +80,38 @@ function refreshDashboard() {
             /* Voltage gauges */
             if (typeof updateGauges === 'function') {
                 updateGauges(data.inversors);
+            }
+
+            /* Compensació gauge */
+            if (data.compensacio && typeof updateCompensacioGauge === 'function') {
+                updateCompensacioGauge(data.compensacio);
+            }
+
+            /* Negative hours chart */
+            if (data.negatius && typeof updateNegHoursChart === 'function') {
+                updateNegHoursChart(data.negatius);
+            }
+
+            /* Maximetre chart */
+            if (data.maximetre && typeof updateMaximetreChart === 'function') {
+                updateMaximetreChart(data.maximetre);
+            }
+
+            /* Battery chart */
+            if (data.bateria && typeof updateBatteryChart === 'function') {
+                updateBatteryChart(data.bateria);
+            }
+
+            /* Negative price alert badge */
+            var negBadge = document.getElementById('neg-price-badge');
+            if (negBadge && data.negatius) {
+                if (data.negatius.is_negative_now) {
+                    negBadge.textContent = 'PREU NEGATIU ARA: ' + data.negatius.current_price_mwh.toFixed(2) + ' \u20ac/MWh';
+                    negBadge.className = 'status-badge status-error neg-alert-badge';
+                    negBadge.style.display = 'inline-block';
+                } else {
+                    negBadge.style.display = 'none';
+                }
             }
 
             /* Curtailment KPI color */

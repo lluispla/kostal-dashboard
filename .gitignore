@@ -6,6 +6,10 @@
 # InfluxDB data & backups
 data/
 backups/
+*.tar
+
+# Working docs (scratch, not source)
+/STAGING_PLAN.md
 
 # Python
 __pycache__/

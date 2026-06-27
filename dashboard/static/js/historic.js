@@ -21,6 +21,8 @@
     let chartGenCons = null;
     let chartImpExp = null;
     let chartOmie = null;
+    let chartCostEfectiu = null;
+    let chartCostByHour = null;
     let chartVoltage = null;
     let currentRange = '7d';
     let showEma = false;
@@ -76,8 +78,8 @@
                 ? summary.avg_indexed_eur_kwh.toFixed(4)
                 : '--';
         var effectiveCost = '--';
-        if (fixedRate && summary.total_consumption_kwh > 0) {
-            effectiveCost = ((summary.total_import_kwh * fixedRate) / summary.total_consumption_kwh).toFixed(4);
+        if (summary.total_import_kwh > 0 && summary.total_import_cost !== undefined) {
+            effectiveCost = (summary.total_import_cost / summary.total_import_kwh).toFixed(4);
         }
         document.getElementById('kpi-effective').textContent = effectiveCost;
         document.getElementById('kpi-indexed-avg').textContent =
@@ -223,7 +225,122 @@
         });
     }
 
-    // -- Chart 4: Tensió xarxa (L1/L2/L3 + 253V threshold) -------------------
+    // -- Chart 4: Cost efectiu ------------------------------------------------
+    function initChartCostEfectiu(data) {
+        const ctx = document.getElementById('chart-cost-efectiu').getContext('2d');
+        if (chartCostEfectiu) chartCostEfectiu.destroy();
+
+        var maLabel = data.granularity === '1h' ? 'Mitjana 24h' : 'Mitjana 7d';
+        var datasets = [
+            { label: 'Cost/kWh importat', data: data.cost_efectiu, borderColor: 'rgba(142, 68, 173, 0.4)', backgroundColor: 'rgba(142, 68, 173, 0.08)', fill: true, tension: 0.3, pointRadius: 0, borderWidth: 1.5 },
+            { label: maLabel, data: data.cost_efectiu_ma, borderColor: '#8e44ad', backgroundColor: 'transparent', fill: false, tension: 0.4, pointRadius: 0, borderWidth: 2.5 },
+        ];
+        if (data._fixed_rate && data.cost_efectiu.length > 0) {
+            var first = data.cost_efectiu[0].x;
+            var last = data.cost_efectiu[data.cost_efectiu.length - 1].x;
+            datasets.push({ label: 'Tarifa fixa', data: [{ x: first, y: data._fixed_rate }, { x: last, y: data._fixed_rate }], borderColor: '#002B5B', borderDash: [6, 4], borderWidth: 2, pointRadius: 0, fill: false });
+        }
+
+        chartCostEfectiu = new Chart(ctx, {
+            type: 'line',
+            data: { datasets: datasets },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                scales: {
+                    x: { type: 'time', time: { unit: timeUnit(data.granularity), tooltipFormat: data.granularity === '1h' ? 'dd/MM HH:mm' : 'dd/MM/yyyy', displayFormats: { hour: 'HH:mm', day: 'dd/MM' } }, grid: { display: false } },
+                    y: { position: 'right', ticks: { callback: function (v) { return v.toFixed(4) + ' €/kWh'; } }, grid: { color: '#f0f0f0' } },
+                },
+                plugins: {
+                    zoom: zoomOptions,
+                    legend: { position: 'top', labels: { usePointStyle: true, boxWidth: 8 } },
+                    tooltip: { callbacks: { label: function (ctx) { return ctx.dataset.label + ': ' + ctx.parsed.y.toFixed(4) + ' €/kWh'; } } },
+                },
+            },
+        });
+    }
+
+    // -- Chart 5: Cost efectiu per franja horària ------------------------------
+    function initChartCostByHour(data) {
+        const ctx = document.getElementById('chart-cost-by-hour').getContext('2d');
+        if (chartCostByHour) chartCostByHour.destroy();
+
+        var labels = [];
+        for (var i = 0; i < 24; i++) labels.push(String(i).padStart(2, '0') + ':00');
+
+        // Color bars: 19-22 highlighted in red/orange, rest in purple
+        var barColors = data.cost_by_hour.map(function (_, i) {
+            return (i >= 19 && i < 22) ? 'rgba(230, 57, 70, 0.8)' : 'rgba(142, 68, 173, 0.6)';
+        });
+        var barBorders = data.cost_by_hour.map(function (_, i) {
+            return (i >= 19 && i < 22) ? '#E63946' : '#8e44ad';
+        });
+
+        // Consumption bar colors
+        var consColors = data.cons_by_hour.map(function (_, i) {
+            return (i >= 19 && i < 22) ? 'rgba(230, 57, 70, 0.25)' : 'rgba(12, 77, 162, 0.25)';
+        });
+        var consBorders = data.cons_by_hour.map(function (_, i) {
+            return (i >= 19 && i < 22) ? 'rgba(230, 57, 70, 0.6)' : 'rgba(12, 77, 162, 0.5)';
+        });
+
+        chartCostByHour = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Cost efectiu',
+                        data: data.cost_by_hour,
+                        backgroundColor: barColors,
+                        borderColor: barBorders,
+                        borderWidth: 1,
+                        yAxisID: 'y',
+                    },
+                    {
+                        label: 'Consum (kWh)',
+                        data: data.cons_by_hour,
+                        backgroundColor: consColors,
+                        borderColor: consBorders,
+                        borderWidth: 1,
+                        yAxisID: 'y1',
+                    },
+                ],
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                scales: {
+                    x: { grid: { display: false } },
+                    y: {
+                        position: 'right',
+                        ticks: { callback: function (v) { return v.toFixed(3) + ' €'; } },
+                        grid: { color: '#f0f0f0' },
+                        title: { display: true, text: '€/kWh' },
+                    },
+                    y1: {
+                        position: 'left',
+                        ticks: { callback: function (v) { return v.toFixed(0) + ' kWh'; } },
+                        grid: { display: false },
+                        title: { display: true, text: 'kWh' },
+                    },
+                },
+                plugins: {
+                    legend: { position: 'top', labels: { usePointStyle: true, boxWidth: 8 } },
+                    tooltip: {
+                        callbacks: {
+                            label: function (ctx) {
+                                if (ctx.datasetIndex === 0) return ctx.dataset.label + ': ' + ctx.parsed.y.toFixed(4) + ' €/kWh';
+                                return ctx.dataset.label + ': ' + ctx.parsed.y.toFixed(1) + ' kWh';
+                            },
+                        },
+                    },
+                },
+            },
+        });
+    }
+
+    // -- Chart 6: Tensió xarxa (L1/L2/L3 + 253V threshold) -------------------
     function initChartVoltage(data) {
         const ctx = document.getElementById('chart-voltage-hist');
         if (!ctx) return;
@@ -291,6 +408,7 @@
         if (!lastData) return;
         initChartImpExp(lastData);
         initChartOmie(lastData);
+        initChartCostEfectiu(lastData);
     }
 
     // -- Data loading ---------------------------------------------------------
@@ -311,6 +429,8 @@
             initChartGenCons(data);
             initChartImpExp(data);
             initChartOmie(data);
+            initChartCostEfectiu(data);
+            initChartCostByHour(data);
             initChartVoltage(data);
         } catch (e) {
             loading.textContent = 'Error carregant dades.';
@@ -321,7 +441,9 @@
     document.getElementById('reset-zoom-1').addEventListener('click', function () { if (chartGenCons) chartGenCons.resetZoom(); });
     document.getElementById('reset-zoom-2').addEventListener('click', function () { if (chartImpExp) chartImpExp.resetZoom(); });
     document.getElementById('reset-zoom-3').addEventListener('click', function () { if (chartOmie) chartOmie.resetZoom(); });
-    document.getElementById('reset-zoom-4').addEventListener('click', function () { if (chartVoltage) chartVoltage.resetZoom(); });
+    document.getElementById('reset-zoom-4').addEventListener('click', function () { if (chartCostEfectiu) chartCostEfectiu.resetZoom(); });
+    document.getElementById('reset-zoom-5').addEventListener('click', function () { if (chartCostByHour) chartCostByHour.resetZoom(); });
+    document.getElementById('reset-zoom-6').addEventListener('click', function () { if (chartVoltage) chartVoltage.resetZoom(); });
 
     // -- Range button clicks --------------------------------------------------
     document.querySelectorAll('.range-btn').forEach(function (btn) {
@@ -343,6 +465,8 @@
         if (chartGenCons) chartGenCons.resize();
         if (chartImpExp) chartImpExp.resize();
         if (chartOmie) chartOmie.resize();
+        if (chartCostEfectiu) chartCostEfectiu.resize();
+        if (chartCostByHour) chartCostByHour.resize();
         if (chartVoltage) chartVoltage.resize();
     }
 

@@ -24,6 +24,7 @@ let chartOmie    = null;
 // -- EMA helpers ----------------------------------------------------------
 let dashShowEma = false;
 let lastPowerData = null;
+let lastForecastData = null;
 let lastYieldData = null;
 let lastMercatData = null;
 
@@ -65,11 +66,13 @@ function _powerXAxis() {
 // EMA period for 1-minute power data: 30 (half-hour smoothing)
 const POWER_EMA_PERIOD = 30;
 
-/* -- 1a. Generation ------------------------------------------------------- */
+/* -- 1a. Generation (with solar forecast overlay) ------------------------- */
 function _initGen(data) {
     const ctx = document.getElementById('chart-generation');
     if (!ctx) return;
+    var hasForecast = lastForecastData && lastForecastData.forecast_today && lastForecastData.forecast_today.length > 0;
     var datasets = [{
+        label: 'Generació real',
         data: data,
         borderColor: COLORS.blue,
         backgroundColor: COLORS.blueFill,
@@ -78,6 +81,19 @@ function _initGen(data) {
         pointRadius: 0,
         borderWidth: dashShowEma ? 1 : 2,
     }];
+    if (hasForecast) {
+        datasets.push({
+            label: 'Previsió solar',
+            data: lastForecastData.forecast_today,
+            borderColor: COLORS.yellow,
+            backgroundColor: 'rgba(240,173,78,0.08)',
+            fill: true,
+            tension: 0.4,
+            pointRadius: 0,
+            borderWidth: 2,
+            borderDash: [6, 3],
+        });
+    }
     if (dashShowEma) {
         datasets.push(_emaDs('EMA', data, COLORS.blue, POWER_EMA_PERIOD));
     }
@@ -88,8 +104,8 @@ function _initGen(data) {
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
-                legend: { display: dashShowEma, position: 'top', labels: { usePointStyle: true, boxWidth: 8 } },
-                tooltip: { callbacks: { label: c => c.parsed.y.toLocaleString('ca') + ' W' } },
+                legend: { display: hasForecast || dashShowEma, position: 'top', labels: { usePointStyle: true, boxWidth: 8 } },
+                tooltip: { callbacks: { label: c => (c.dataset.label || '') + ': ' + c.parsed.y.toLocaleString('ca') + ' W' } },
             },
             scales: { x: _powerXAxis(), y: {
                 position: 'right',
@@ -254,16 +270,18 @@ function _initVoltage(l1, l2, l3) {
 }
 
 /* -- Public interface ----------------------------------------------------- */
-function initPowerCurve(data) {
+function initPowerCurve(data, forecast) {
     lastPowerData = data;
+    if (forecast) lastForecastData = forecast;
     _initGen(data.generation);
     _initCons(data.consumption);
     _initGrid(data.grid);
     _initVoltage(data.voltage_l1 || [], data.voltage_l2 || [], data.voltage_l3 || []);
 }
 
-function updatePowerCurve(data) {
+function updatePowerCurve(data, forecast) {
     lastPowerData = data;
+    if (forecast) lastForecastData = forecast;
     if (chartGen) chartGen.destroy();
     if (chartCons) chartCons.destroy();
     if (chartGrid) chartGrid.destroy();
@@ -524,6 +542,270 @@ function _updateGaugeText(key, voltage) {
         valEl.style.color = _gaugeColor(voltage);
     }
     if (hwmEl) hwmEl.textContent = 'Màx: ' + gaugeHWM[key].toFixed(1) + ' V';
+}
+
+/* -- 4. Compensació gauge (half-circle doughnut) ------------------------- */
+var chartCompGauge = null;
+
+function _compGaugeColor(ratio) {
+    if (ratio > 100) return '#E63946';
+    if (ratio > 80) return '#f0ad4e';
+    return '#28a745';
+}
+
+function initCompensacioGauge(compensacio) {
+    var canvas = document.getElementById('gauge-compensacio');
+    if (!canvas || !compensacio) return;
+
+    if (chartCompGauge) chartCompGauge.destroy();
+
+    var ratio = compensacio.gauge_pct || 0;
+    var filled = Math.min(ratio / 2, 100); // 0-200 mapped to 0-100 for half circle
+    var empty = 100 - filled;
+
+    chartCompGauge = new Chart(canvas, {
+        type: 'doughnut',
+        data: {
+            datasets: [{
+                data: [filled, empty],
+                backgroundColor: [_compGaugeColor(ratio), '#e9ecef'],
+                borderWidth: 0,
+            }]
+        },
+        options: {
+            circumference: 180,
+            rotation: -90,
+            cutout: '70%',
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false }, tooltip: { enabled: false } },
+        },
+    });
+}
+
+function updateCompensacioGauge(compensacio) {
+    if (!compensacio) return;
+    initCompensacioGauge(compensacio);
+    // Update recommendation text
+    var rec = document.getElementById('compensacio-rec');
+    if (rec) rec.textContent = compensacio.recommendation;
+}
+
+/* -- 5. Negative hours bar chart (30d) ----------------------------------- */
+var chartNegHours = null;
+
+function initNegHoursChart(negatius) {
+    var canvas = document.getElementById('chart-neg-hours');
+    if (!canvas || !negatius) return;
+
+    if (chartNegHours) chartNegHours.destroy();
+
+    var data = negatius.daily_neg_30d || [];
+    chartNegHours = new Chart(canvas, {
+        type: 'bar',
+        data: {
+            labels: data.map(function(d) { return d.x; }),
+            datasets: [{
+                label: 'Hores negatives',
+                data: data.map(function(d) { return d.y; }),
+                backgroundColor: COLORS.red,
+                borderRadius: 2,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        title: function(items) {
+                            var d = new Date(items[0].parsed.x);
+                            return d.toLocaleDateString('ca', { day: 'numeric', month: 'short' });
+                        },
+                        label: function(ctx) { return ctx.parsed.y + ' hores'; }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    type: 'time',
+                    time: { unit: 'day', displayFormats: { day: 'dd/MM' } },
+                    grid: { display: false },
+                    ticks: { color: '#6c757d', maxRotation: 45 },
+                },
+                y: {
+                    beginAtZero: true,
+                    position: 'right',
+                    ticks: { color: '#6c757d', stepSize: 1, callback: function(v) { return v + 'h'; } },
+                    grid: { color: '#f0f0f0' },
+                }
+            }
+        }
+    });
+}
+
+function updateNegHoursChart(negatius) {
+    if (!negatius || !negatius.daily_neg_30d) return;
+    if (!chartNegHours) return initNegHoursChart(negatius);
+    var data = negatius.daily_neg_30d;
+    chartNegHours.data.labels = data.map(function(d) { return d.x; });
+    chartNegHours.data.datasets[0].data = data.map(function(d) { return d.y; });
+    chartNegHours.update('none');
+}
+
+/* -- 6. Maximetre bar chart (contracted vs actual per period) ------------- */
+var chartMaximetre = null;
+
+function initMaximetreChart(maximetre) {
+    var canvas = document.getElementById('chart-maximetre');
+    if (!canvas || !maximetre || !maximetre.data_available) return;
+
+    if (chartMaximetre) chartMaximetre.destroy();
+
+    var periods = ['P1', 'P2', 'P3', 'P4', 'P5', 'P6'];
+    var contractedData = [];
+    var actualData = [];
+    var recommendedData = [];
+
+    periods.forEach(function(p) {
+        var pd = maximetre.periods[p];
+        if (pd) {
+            contractedData.push(pd.contracted_kw);
+            actualData.push(pd.actual_max_kw);
+            recommendedData.push(pd.recommended_kw);
+        } else {
+            contractedData.push(0);
+            actualData.push(0);
+            recommendedData.push(0);
+        }
+    });
+
+    chartMaximetre = new Chart(canvas, {
+        type: 'bar',
+        data: {
+            labels: periods,
+            datasets: [
+                {
+                    label: 'Contractada (kW)',
+                    data: contractedData,
+                    backgroundColor: COLORS.navy,
+                    borderRadius: 3,
+                },
+                {
+                    label: 'Maxim real (kW)',
+                    data: actualData,
+                    backgroundColor: actualData.map(function(v, i) {
+                        var pct = contractedData[i] > 0 ? (v / contractedData[i]) * 100 : 0;
+                        if (pct > 85) return COLORS.red;
+                        if (pct > 50) return COLORS.yellow;
+                        return COLORS.green;
+                    }),
+                    borderRadius: 3,
+                },
+                {
+                    label: 'Recomanada (kW)',
+                    data: recommendedData,
+                    backgroundColor: 'rgba(12,77,162,0.3)',
+                    borderColor: COLORS.blue,
+                    borderWidth: 1,
+                    borderDash: [4, 2],
+                    borderRadius: 3,
+                },
+            ]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'top', labels: { usePointStyle: true, boxWidth: 8 } },
+                tooltip: {
+                    callbacks: {
+                        label: function(ctx) { return ctx.dataset.label + ': ' + ctx.parsed.x.toFixed(1) + ' kW'; }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    beginAtZero: true,
+                    ticks: { color: '#6c757d', callback: function(v) { return v + ' kW'; } },
+                    grid: { color: '#f0f0f0' },
+                },
+                y: {
+                    grid: { display: false },
+                    ticks: { color: '#6c757d', font: { weight: 'bold' } },
+                }
+            }
+        }
+    });
+}
+
+function updateMaximetreChart(maximetre) {
+    if (!maximetre || !maximetre.data_available) return;
+    initMaximetreChart(maximetre);
+}
+
+/* -- 7. Battery SOC curve chart ------------------------------------------ */
+var chartBattery = null;
+
+function initBatteryChart(bateria) {
+    var canvas = document.getElementById('chart-battery-soc');
+    if (!canvas || !bateria || !bateria.soc_curve || bateria.soc_curve.length === 0) return;
+
+    if (chartBattery) chartBattery.destroy();
+
+    chartBattery = new Chart(canvas, {
+        type: 'line',
+        data: {
+            datasets: [{
+                label: 'SOC (%)',
+                data: bateria.soc_curve,
+                borderColor: '#0C4DA2',
+                backgroundColor: 'rgba(12,77,162,0.12)',
+                fill: true,
+                tension: 0.3,
+                pointRadius: 0,
+                borderWidth: 2,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        title: function(items) {
+                            var d = new Date(items[0].parsed.x);
+                            return d.toLocaleTimeString('ca', { hour: '2-digit', minute: '2-digit' });
+                        },
+                        label: function(ctx) { return 'SOC: ' + ctx.parsed.y.toFixed(1) + '%'; }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    type: 'time',
+                    time: { unit: 'hour', displayFormats: { hour: 'HH:mm' } },
+                    grid: { display: false },
+                    ticks: { color: '#6c757d' },
+                },
+                y: {
+                    position: 'right',
+                    min: 0,
+                    max: 100,
+                    ticks: { color: '#6c757d', callback: function(v) { return v + '%'; } },
+                    grid: { color: '#f0f0f0' },
+                }
+            }
+        }
+    });
+}
+
+function updateBatteryChart(bateria) {
+    if (!bateria) return;
+    initBatteryChart(bateria);
 }
 
 /* -- Fullscreen toggle (called from dashboard page) ---------------------- */

@@ -24,9 +24,9 @@
     <button class="range-btn" id="toggle-ema">EMA</button>
 </div>
 
-<!-- Cost efectiu badge -->
+<!-- Cost all-in badge -->
 <div class="cost-badge" id="cost-badge">
-    El teu cost efectiu: <strong id="kpi-effective">--</strong> &euro;/kWh
+    Cost all-in (mes): <strong id="kpi-effective">--</strong> &euro;/kWh
     &nbsp;&middot;&nbsp;
     Preu indexat mitj&agrave;: <strong id="kpi-indexed-avg">--</strong> &euro;/kWh
 </div>
@@ -75,11 +75,27 @@
     <canvas id="chart-omie"></canvas>
 </div>
 
-<!-- Chart 4: Tensió xarxa -->
+<!-- Chart 4: Cost all-in per kWh importat -->
 <div class="historic-chart-wrap" id="chart-wrap-4">
-    <h3>Tensi&oacute; xarxa (Piko CI 50)</h3>
+    <h3>Cost energia per kWh importat (comparable a factura)</h3>
     <button class="chart-btn fullscreen-btn" data-target="chart-wrap-4">&#x26F6;</button>
     <button class="chart-btn reset-zoom" id="reset-zoom-4">Reset zoom</button>
+    <canvas id="chart-cost-efectiu"></canvas>
+</div>
+
+<!-- Chart 5: Cost energia per franja horària -->
+<div class="historic-chart-wrap" id="chart-wrap-5">
+    <h3>Cost energia per franja hor&agrave;ria (kWh importat)</h3>
+    <button class="chart-btn fullscreen-btn" data-target="chart-wrap-5">&#x26F6;</button>
+    <button class="chart-btn reset-zoom" id="reset-zoom-5">Reset zoom</button>
+    <canvas id="chart-cost-by-hour"></canvas>
+</div>
+
+<!-- Chart 6: Tensió xarxa -->
+<div class="historic-chart-wrap" id="chart-wrap-6">
+    <h3>Tensi&oacute; xarxa (Piko CI 50)</h3>
+    <button class="chart-btn fullscreen-btn" data-target="chart-wrap-6">&#x26F6;</button>
+    <button class="chart-btn reset-zoom" id="reset-zoom-6">Reset zoom</button>
     <canvas id="chart-voltage-hist"></canvas>
 </div>
 

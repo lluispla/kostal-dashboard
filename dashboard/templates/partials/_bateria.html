@@ -1,0 +1,77 @@
+<!-- Bateria — Simulacio de bateria -->
+<div class="section">
+    <div class="section-header">
+        <span class="icon">&#128267;</span>
+        <h2>Simulaci&oacute; Bateria</h2>
+    </div>
+
+    <!-- KPI cards -->
+    <div class="kpi-row">
+        <div class="kpi-card">
+            <div class="label">Capacitat configurada</div>
+            <div class="description">Bateria simulada</div>
+            <div class="value val-blue">
+                <span data-field="bateria.config.capacity_kwh" data-fmt="0">{{ d.bateria.config.capacity_kwh }}</span>
+                <span class="unit">kWh</span>
+            </div>
+        </div>
+
+        <div class="kpi-card">
+            <div class="label">Import evitat (mes)</div>
+            <div class="description">Energia que s'hauria importat de xarxa</div>
+            <div class="value val-green">
+                <span data-field="bateria.avoided_import_kwh" data-fmt="1">{{ "%.1f"|format(d.bateria.avoided_import_kwh) }}</span>
+                <span class="unit">kWh</span>
+            </div>
+        </div>
+
+        <div class="kpi-card">
+            <div class="label">Estalvi mensual</div>
+            <div class="description">Cost evitat per desc&agrave;rrega de bateria</div>
+            <div class="value val-green">
+                <span data-field="bateria.savings_month" data-fmt="2">{{ "%.2f"|format(d.bateria.savings_month) }}</span>
+                <span class="unit">&euro;</span>
+            </div>
+        </div>
+
+        <div class="kpi-card">
+            <div class="label">Estalvi anual estimat</div>
+            <div class="description">Extrapolaci&oacute; a 365 dies</div>
+            <div class="value val-blue">
+                <span data-field="bateria.savings_annual_est" data-fmt="2">{{ "%.2f"|format(d.bateria.savings_annual_est) }}</span>
+                <span class="unit">&euro;</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- SOC curve chart -->
+    <div style="position:relative; height:250px; margin-bottom:1.5rem;">
+        <canvas id="chart-battery-soc"></canvas>
+    </div>
+
+    <!-- Sizing table -->
+    <div style="overflow-x:auto;">
+        <table class="data-table" id="battery-sizing-table">
+            <thead>
+                <tr>
+                    <th>Capacitat (kWh)</th>
+                    <th>Estalvi mensual (&euro;)</th>
+                    <th>Estalvi anual est. (&euro;)</th>
+                    <th>Cost estimat bateria (&euro;)</th>
+                    <th>Payback (anys)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for s in d.bateria.sizing %}
+                <tr{% if s.capacity == d.bateria.config.capacity_kwh %} style="background:rgba(12,77,162,0.08); font-weight:600;"{% endif %}>
+                    <td>{{ s.capacity }}</td>
+                    <td>{{ "%.2f"|format(s.savings_month) }}</td>
+                    <td>{{ "%.2f"|format(s.savings_annual_est) }}</td>
+                    <td>{{ "{:,.0f}".format(s.cost_est) }}</td>
+                    <td>{{ "%.1f"|format(s.payback_years) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>

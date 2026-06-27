@@ -1,0 +1,60 @@
+<!-- Preus Negatius — Negative OMIE price tracker -->
+<div class="section">
+    <div class="section-header">
+        <span class="icon">&#9888;</span>
+        <h2>Preus Negatius OMIE</h2>
+        {% if d.negatius.is_negative_now %}
+        <span class="status-badge status-error neg-alert-badge" id="neg-price-badge">
+            PREU NEGATIU ARA: {{ "%.2f"|format(d.negatius.current_price_mwh) }} &euro;/MWh
+        </span>
+        {% else %}
+        <span class="status-badge status-ok" id="neg-price-badge" style="display:none;"></span>
+        {% endif %}
+    </div>
+
+    <div class="kpi-row">
+        <div class="kpi-card">
+            <div class="label">Hores negatives avui</div>
+            <div class="description">Hores amb preu OMIE &lt; 0 avui</div>
+            <div class="value {% if d.negatius.neg_hours_today > 0 %}val-red{% else %}val-green{% endif %}">
+                <span data-field="negatius.neg_hours_today">{{ d.negatius.neg_hours_today }}</span>
+                <span class="unit">h</span>
+            </div>
+        </div>
+
+        <div class="kpi-card">
+            <div class="label">Hores negatives mes</div>
+            <div class="description">Total hores amb preu negatiu aquest mes</div>
+            <div class="value {% if d.negatius.neg_hours_month > 0 %}val-red{% else %}val-green{% endif %}">
+                <span data-field="negatius.neg_hours_month">{{ d.negatius.neg_hours_month }}</span>
+                <span class="unit">h</span>
+            </div>
+        </div>
+
+        <div class="kpi-card">
+            <div class="label">Impacte avui</div>
+            <div class="description">EUR perduts exportant a preu negatiu ({{ "%.1f"|format(d.negatius.export_kwh_neg_today) }} kWh)</div>
+            <div class="value {% if d.negatius.impact_today > 0 %}val-red{% else %}val-muted{% endif %}">
+                <span data-field="negatius.impact_today" data-fmt="4">{{ "%.4f"|format(d.negatius.impact_today) }}</span>
+                <span class="unit">&euro;</span>
+            </div>
+        </div>
+
+        <div class="kpi-card">
+            <div class="label">Impacte mes</div>
+            <div class="description">EUR perduts exportant a preu negatiu ({{ "%.1f"|format(d.negatius.export_kwh_neg_month) }} kWh)</div>
+            <div class="value {% if d.negatius.impact_month > 0 %}val-red{% else %}val-muted{% endif %}">
+                <span data-field="negatius.impact_month" data-fmt="4">{{ "%.4f"|format(d.negatius.impact_month) }}</span>
+                <span class="unit">&euro;</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 30-day bar chart -->
+    <div class="chart-wrap">
+        <h3>Hores amb preu negatiu &mdash; &uacute;ltims 30 dies</h3>
+        <div style="height: 200px;">
+            <canvas id="chart-neg-hours"></canvas>
+        </div>
+    </div>
+</div>

@@ -7,7 +7,31 @@
 {% endblock %}
 
 {% block content %}
+{% include "partials/_hero.html" %}
+
+<div class="martini-stripe-thin" style="margin-bottom: 1.5rem;"></div>
+
 {% include "partials/_economia.html" %}
+
+<div class="martini-stripe-thin" style="margin-bottom: 1.5rem;"></div>
+
+{% include "partials/_compensacio.html" %}
+
+<div class="martini-stripe-thin" style="margin-bottom: 1.5rem;"></div>
+
+{% include "partials/_preus_negatius.html" %}
+
+<div class="martini-stripe-thin" style="margin-bottom: 1.5rem;"></div>
+
+{% include "partials/_maximetre.html" %}
+
+<div class="martini-stripe-thin" style="margin-bottom: 1.5rem;"></div>
+
+{% include "partials/_reactiva.html" %}
+
+<div class="martini-stripe-thin" style="margin-bottom: 1.5rem;"></div>
+
+{% include "partials/_bateria.html" %}
 
 <div class="martini-stripe-thin" style="margin-bottom: 1.5rem;"></div>
 
@@ -24,6 +48,19 @@
 <div class="martini-stripe-thin" style="margin-bottom: 1.5rem;"></div>
 
 {% include "partials/_inversors.html" %}
+
+<div class="martini-stripe-thin" style="margin-bottom: 1.5rem;"></div>
+
+<!-- Dynamic Analysis -->
+<div class="section">
+    <div class="section-header">
+        <span class="icon">&#128218;</span>
+        <h2>An&agrave;lisi del Dia</h2>
+    </div>
+    <div class="settings-card" style="padding: 1.5rem;">
+        <p id="dash-analysis" style="font-size: 0.92rem; line-height: 1.75; margin: 0; color: var(--text); text-align: justify;">--</p>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
@@ -32,10 +69,95 @@
     // Initial chart data from server-side render
     const initData = {{ d|tojson }};
 
-    initPowerCurve(initData.energia.power_curve);
+    initPowerCurve(initData.energia.power_curve, initData.forecast);
     initYield30d(initData.energia.daily_yield_30d);
     initOmieHourly(initData.mercat);
     initGauges(initData.inversors);
+    initCompensacioGauge(initData.compensacio);
+    initNegHoursChart(initData.negatius);
+    if (initData.maximetre) initMaximetreChart(initData.maximetre);
+    if (initData.bateria) initBatteryChart(initData.bateria);
+
+    // Dynamic analysis
+    (function(d) {
+        var el = document.getElementById('dash-analysis');
+        if (!el) return;
+        var e = d.economia || {};
+        var en = d.energia || {};
+        var m = d.mercat || {};
+        var p = d.previsio || {};
+        var bat = d.bateria || {};
+        var comp = d.compensacio || {};
+        function f(v) { return (v||0).toLocaleString('ca',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+        function f0(v) { return (v||0).toLocaleString('ca',{maximumFractionDigits:0}); }
+
+        var paras = [];
+
+        // Energy overview
+        var selfPct = en.self_consumption_rate || 0;
+        var genKw = en.plant_power_w ? (en.plant_power_w/1000).toFixed(1) : '0';
+        var consKw = en.consumption_w ? (en.consumption_w/1000).toFixed(1) : '0';
+        var gridKw = en.grid_flow_w ? (en.grid_flow_w/1000).toFixed(1) : '0';
+        var gridDir = (en.grid_flow_w||0) < 0 ? 'exportant' : 'importar';
+        paras.push(
+            'Ara mateix la planta genera <strong>' + genKw + ' kW</strong> i l\'empresa consumeix <strong>' +
+            consKw + ' kW</strong>. ' +
+            (en.grid_flow_w < -100
+                ? 'Hi ha excedent: s\'estan <strong>exportant ' + Math.abs(parseFloat(gridKw)).toFixed(1) + ' kW</strong> a la xarxa.'
+                : 'S\'estan <strong>importar ' + gridKw + ' kW</strong> de la xarxa.') +
+            ' La taxa d\'autoconsum avui \u00e9s del <strong>' + selfPct + '%</strong>.'
+        );
+
+        // Economics
+        var benefitToday = e.total_benefit_today || 0;
+        var benefitMonth = e.monthly_benefit || 0;
+        var billSom = e.bill_som_projected || 0;
+        var billIber = e.bill_iber_projected || 0;
+        var diffProj = e.bill_diff_projected || 0;
+        paras.push(
+            'El benefici solar d\'avui \u00e9s de <strong>' + f(benefitToday) + ' \u20ac</strong> ' +
+            '(autoconsum + excedents) i l\'acumulat del mes \u00e9s de <strong>' + f(benefitMonth) + ' \u20ac</strong>. ' +
+            'La factura projectada amb Som Indexada \u00e9s de <strong>' + f(billSom) + ' \u20ac</strong> (pre-IVA), ' +
+            'mentre que amb Iberdrola seria de <strong>' + f(billIber) + ' \u20ac</strong> \u2014 ' +
+            'un estalvi de <strong>' + f(diffProj) + ' \u20ac</strong> aquest mes.'
+        );
+
+        // Market
+        var omie = m.omie_eur_mwh || 0;
+        var period = m.current_period || '--';
+        var dayFlag = m.day_flag || '';
+        var dayText = dayFlag === 'cheap' ? 'un dia barat' : (dayFlag === 'expensive' ? 'un dia car' : 'un dia normal');
+        paras.push(
+            'El preu OMIE actual \u00e9s de <strong>' + omie.toFixed(1) + ' \u20ac/MWh</strong> (' +
+            period + '). Avui \u00e9s ' + dayText + ' al mercat majorista.'
+        );
+
+        // Compensation
+        var ratio = comp.ratio_pct || 0;
+        if (comp.wasted > 0) {
+            paras.push(
+                'Atenci\u00f3: hi ha <strong>' + f(comp.wasted) + ' \u20ac</strong> d\'excedents malbaratats (superen el cost d\'energia). ' +
+                'Amb Flux Solar es recuperarien parcialment.'
+            );
+        } else if (ratio < 50) {
+            paras.push(
+                'La compensaci\u00f3 d\'excedents \u00e9s baixa (' + ratio.toFixed(0) + '% del cost d\'energia). ' +
+                'Hi ha marge per aprofitar m\u00e9s els excedents.'
+            );
+        }
+
+        // Previsió factura
+        if (p.estalvi_anual) {
+            paras.push(
+                'Projecci\u00f3 anual: la millor tarifa (' + (p.millor_anual||'Som Indexada') + ') estalvia <strong>' +
+                f0(p.estalvi_anual) + ' \u20ac/any</strong> respecte Iberdrola.'
+            );
+        }
+
+        el.innerHTML = paras.map(function(t) {
+            return '<p style="font-size:0.92rem;line-height:1.75;margin:0 0 0.6rem;color:var(--text);text-align:justify;">' + t + '</p>';
+        }).join('');
+    })(initData);
 
     // Escape key exits fullscreen on dashboard
     document.addEventListener('keydown', function (e) {
@@ -44,7 +166,7 @@
                 el.classList.remove('dash-fullscreen');
             });
             setTimeout(function () {
-                [chartGen, chartCons, chartGrid, chartVoltage, chartYield, chartOmie].forEach(function (c) {
+                [chartGen, chartCons, chartGrid, chartVoltage, chartYield, chartOmie, chartCompGauge, chartNegHours, chartMaximetre].forEach(function (c) {
                     if (c) c.resize();
                 });
             }, 50);
@@ -52,4 +174,5 @@
     });
 </script>
 <script src="{{ url_for('static', filename='js/refresh.js') }}"></script>
+<script src="{{ url_for('static', filename='js/kiosk.js') }}"></script>
 {% endblock %}

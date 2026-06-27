@@ -164,14 +164,16 @@ def get_omie_avg_price(start_date, end_date):
 def build_analysis(invoice_data):
     """Build cost analysis comparing fixed rate vs OMIE indexed."""
     pricing = load_pricing()
+    iber = pricing.get("scenarios", {}).get("iberdrola", {})
+    iber_rate = iber.get("energy_eur_kwh", {}).get("P1", 0.154)
     analysis = {
         "invoice": invoice_data,
         "pricing": pricing,
-        "fixed_rate": pricing["energy"]["effective_rate_eur_kwh"],
+        "fixed_rate": iber_rate,
     }
 
     total_kwh = invoice_data.get("total_consumption_kwh", 0)
-    fixed_cost = total_kwh * pricing["energy"]["effective_rate_eur_kwh"]
+    fixed_cost = total_kwh * iber_rate
     analysis["fixed_energy_cost"] = round(fixed_cost, 2)
 
     # Try to get OMIE comparison
@@ -196,9 +198,10 @@ def build_analysis(invoice_data):
     # Power cost estimate
     days = invoice_data.get("billing_days", 30) or 30
     power_cost = 0
-    for period, rate in pricing["power_charges_eur_kw_day"].items():
+    pwr_year = pricing.get("power_charges_eur_kw_year", {})
+    for period, rate_year in pwr_year.items():
         kw = pricing["contracted_power_kw"].get(period, 69)
-        power_cost += rate * kw * days
+        power_cost += (rate_year / 365) * kw * days
     analysis["power_cost_estimate"] = round(power_cost, 2)
 
     # Tax estimates
@@ -221,15 +224,15 @@ def build_analysis(invoice_data):
     # Optimization suggestions
     analysis["suggestions"] = []
     if omie_avg is not None:
-        if omie_avg < pricing["energy"]["effective_rate_eur_kwh"]:
+        if omie_avg < iber_rate:
             analysis["suggestions"].append(
                 f"Una tarifa indexada hauria estalviat {abs(analysis['savings_vs_omie']):.2f} EUR "
-                f"en aquest període (OMIE mitjà: {omie_avg*1000:.2f} EUR/MWh vs fix: "
-                f"{pricing['energy']['effective_rate_eur_kwh']*1000:.2f} EUR/MWh)"
+                f"en aquest període (OMIE mitjà: {omie_avg*1000:.2f} EUR/MWh vs Iber fix: "
+                f"{iber_rate*1000:.2f} EUR/MWh)"
             )
         else:
             analysis["suggestions"].append(
-                f"La tarifa fixa ha estat més barata que l'indexada per {analysis['savings_vs_omie']:.2f} EUR"
+                f"La tarifa fixa hauria estat més barata que l'indexada per {analysis['savings_vs_omie']:.2f} EUR"
             )
 
     if total_kwh > 0:

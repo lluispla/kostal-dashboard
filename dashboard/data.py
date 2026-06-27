@@ -21,6 +21,7 @@ import csv
 import json
 import logging
 import math
+import time
 from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
 
@@ -151,12 +152,21 @@ def _get_period(dt):
 _indexed_tariff_cache = None
 _pricing_cache = None
 
+# TTL cache for the full dashboard payload. The underlying InfluxDB scans take
+# ~4s; the collector polls every 30s so finer freshness wastes compute. A short
+# TTL is also enough to coalesce the duplicate call made by `/` + the initial
+# `/api/dashboard` refresh from the same page load.
+_DASHBOARD_CACHE_TTL = 30.0
+_dashboard_cache_ts = 0.0
+_dashboard_cache_value = None
+
 
 def invalidate_pricing_caches():
     """Clear all pricing caches so the next call re-reads pricing.json."""
-    global _indexed_tariff_cache, _pricing_cache
+    global _indexed_tariff_cache, _pricing_cache, _dashboard_cache_value
     _indexed_tariff_cache = None
     _pricing_cache = None
+    _dashboard_cache_value = None
 
 
 def _load_indexed_tariff():
@@ -4659,12 +4669,22 @@ def get_consum_preus_data(time_range="today"):
 
 
 def get_all_dashboard_data():
-    """Aggregate all sections + timestamp for the API endpoint."""
+    """Aggregate all sections + timestamp for the API endpoint.
+
+    Cached for ~30s — see `_DASHBOARD_CACHE_TTL`. Pricing changes invalidate
+    via `invalidate_pricing_caches()`.
+    """
+    global _dashboard_cache_ts, _dashboard_cache_value
+    now_mono = time.monotonic()
+    if (_dashboard_cache_value is not None
+            and now_mono - _dashboard_cache_ts < _DASHBOARD_CACHE_TTL):
+        return _dashboard_cache_value
+
     forecast = get_solar_forecast()
     lost = _get_lost_production()
     maximetre = get_maximetre_analysis()
     reactiva = get_reactive_tracking()
-    return {
+    result = {
         "economia": get_economia(),
         "energia": get_energia(),
         "mercat": get_mercat_omie(),
@@ -4681,6 +4701,9 @@ def get_all_dashboard_data():
         "bateria": get_battery_simulation(),
         "last_update": datetime.now(_CET).strftime("%H:%M:%S"),
     }
+    _dashboard_cache_value = result
+    _dashboard_cache_ts = now_mono
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -5760,10 +5783,18 @@ def recover_data_from_backup(lookback_hours=48):
 
     # Use one representative field per measurement to detect gaps
     # (avoids schema collision when grouping mixed int/float fields)
+    # daylight_only: PIKO inverters stop reporting at night, so empty
+    # 10-min windows outside 06:00-22:00 Madrid are expected, not gaps.
     measurements = {
-        "ksem": "active_power_total",
-        "piko": "ac_power_total",
+        "ksem": {"field": "active_power_total", "daylight_only": False},
+        "piko": {"field": "ac_power_total", "daylight_only": True},
     }
+
+    def _is_daylight(win_utc_label):
+        dt_utc = datetime.strptime(
+            win_utc_label, "%Y-%m-%dT%H:%M"
+        ).replace(tzinfo=timezone.utc)
+        return 6 <= dt_utc.astimezone(_CET).hour < 22
     headers = {
         "Authorization": f"Token {INFLUXDB_TOKEN}",
         "Content-Type": "application/vnd.flux",
@@ -5781,65 +5812,69 @@ def recover_data_from_backup(lookback_hours=48):
 
     results = {}
 
-    for meas, detect_field in measurements.items():
-        # 1. Find hours with data locally in lookback window
+    for meas, cfg in measurements.items():
+        detect_field = cfg["field"]
+        daylight_only = cfg["daylight_only"]
+        # 1. Find 10-min windows with data locally in lookback window
         count_query = (
             f'from(bucket: "{INFLUXDB_BUCKET}")'
             f" |> range(start: -{lookback_hours}h)"
             f' |> filter(fn: (r) => r._measurement == "{meas}"'
             f' and r._field == "{detect_field}")'
             f" |> group()"
-            f" |> aggregateWindow(every: 1h, fn: count)"
+            f' |> aggregateWindow(every: 10m, fn: count, timeSrc: "_start")'
             f" |> yield()"
         )
         resp = requests.post(local_query_url, headers=headers, data=count_query,
                              timeout=15)
-        local_hours = set()
+        local_windows = set()
         if resp.status_code == 200 and resp.text.strip():
             for line in resp.text.strip().split("\r\n"):
                 if line.startswith(",_result"):
                     cols = line.split(",")
-                    # Find _time and _value columns
-                    time_col = cols[5] if len(cols) > 5 else ""
+                    # CSV columns: ,result,table,_time,_start,_stop,_value
+                    time_col = cols[3] if len(cols) > 3 else ""
                     val_col = cols[6] if len(cols) > 6 else "0"
                     try:
                         if int(float(val_col)) > 0:
-                            local_hours.add(time_col[:13])  # YYYY-MM-DDTHH
+                            local_windows.add(time_col[:16])  # YYYY-MM-DDTHH:MM
                     except (ValueError, IndexError):
                         pass
 
-        # 2. Find hours with data on backup
+        # 2. Find 10-min windows with data on backup
         resp_b = requests.post(backup_query_url, headers=headers, data=count_query,
                                timeout=15)
         if resp_b.status_code != 200:
             results[meas] = {"error": f"Backup query failed: {resp_b.status_code}"}
             continue
 
-        backup_hours = set()
+        backup_windows = set()
         if resp_b.text.strip():
             for line in resp_b.text.strip().split("\r\n"):
                 if line.startswith(",_result"):
                     cols = line.split(",")
-                    time_col = cols[5] if len(cols) > 5 else ""
+                    # CSV columns: ,result,table,_time,_start,_stop,_value
+                    time_col = cols[3] if len(cols) > 3 else ""
                     val_col = cols[6] if len(cols) > 6 else "0"
                     try:
                         if int(float(val_col)) > 0:
-                            backup_hours.add(time_col[:13])
+                            backup_windows.add(time_col[:16])
                     except (ValueError, IndexError):
                         pass
 
-        # 3. Identify missing hours (in backup but not local)
-        missing = sorted(backup_hours - local_hours)
+        # 3. Identify missing windows (in backup but not local)
+        missing = sorted(backup_windows - local_windows)
+        if daylight_only:
+            missing = [w for w in missing if _is_daylight(w)]
         if not missing:
             results[meas] = {"recovered": 0, "gaps": 0, "message": "Cap forat detectat"}
             continue
 
-        # 4. Build time ranges to query from backup
-        gap_start = missing[0] + ":00:00Z"
-        gap_end_h = missing[-1]
-        # Add 1 hour to end
-        from datetime import datetime as _dt
-        end_dt = _dt.strptime(gap_end_h, "%Y-%m-%dT%H") + timedelta(hours=1)
+        # 4. Build time range spanning first to last missing window
+        gap_start = missing[0] + ":00Z"
+        end_dt = datetime.strptime(
+            missing[-1], "%Y-%m-%dT%H:%M"
+        ) + timedelta(minutes=10)
         gap_end = end_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
 
         # 5. Fetch raw data from backup for the gap period

@@ -71,6 +71,14 @@ body {
 }
 
 /* -- Martini stripe ------------------------------------------------------- */
+/* Period colors for tariff indicator */
+.period-P1 { --period-color: #E63946; }  /* Punta — red (most expensive) */
+.period-P2 { --period-color: #E67E22; }  /* Pla — orange */
+.period-P3 { --period-color: #f0ad4e; }  /* Pla — amber */
+.period-P4 { --period-color: #0C4DA2; }  /* Valle — blue */
+.period-P5 { --period-color: #28a745; }  /* Super Valle — green (cheapest weekday) */
+.period-P6 { --period-color: #6c757d; }  /* Weekend/holiday — grey */
+
 .martini-stripe {
     height: 6px;
     background: linear-gradient(
@@ -79,6 +87,31 @@ body {
         var(--blue) 2px, var(--blue) 4px,
         var(--red) 4px, var(--red) 6px
     );
+    transition: background 1s ease;
+}
+.martini-stripe.period-active {
+    background: var(--period-color);
+}
+
+/* Period badge in header */
+.period-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    background: rgba(255,255,255,0.15);
+    border: 2px solid rgba(255,255,255,0.3);
+    transition: border-color 0.8s, color 0.8s;
+}
+.period-badge .period-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    transition: background 0.8s;
 }
 .martini-stripe-thin {
     height: 3px;
@@ -97,6 +130,14 @@ body {
     padding: 0 2rem;
     display: flex;
     gap: 0;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: none;
+    transition: box-shadow 0.3s;
+}
+.nav.stuck {
+    box-shadow: 0 2px 8px rgba(0,0,0,0.12);
 }
 .nav a {
     display: block;
@@ -159,6 +200,20 @@ body {
     gap: 1rem;
     margin-bottom: 1rem;
 }
+.kpi-row-hero {
+    grid-template-columns: repeat(5, 1fr);
+    gap: 0.7rem;
+}
+.kpi-row-hero .kpi-card {
+    padding: 0.9rem 1rem;
+}
+.kpi-row-hero .kpi-card .value {
+    font-size: 1.6rem;
+}
+.kpi-row-hero .kpi-card .description {
+    font-size: 0.68rem;
+    margin-bottom: 0.4rem;
+}
 
 .kpi-card {
     background: var(--white);
@@ -213,6 +268,7 @@ body {
 .val-navy  { color: var(--navy); }
 .val-green  { color: var(--green); }
 .val-orange { color: var(--orange); }
+.val-yellow { color: var(--yellow); }
 .val-pink   { color: var(--pink); }
 .val-muted  { color: var(--muted); }
 
@@ -1364,10 +1420,132 @@ body {
     font-size: 0.9rem;
 }
 
+/* =========================================================================
+   Kiosk Mode — ?kiosk=1
+   7" touchscreen (800×480 / 1024×600), one section at a time
+   ========================================================================= */
+
+body.kiosk {
+    overflow: hidden;
+    cursor: none;
+    background: var(--white);
+}
+body.kiosk .nav,
+body.kiosk .footer,
+body.kiosk .martini-stripe-thin,
+body.kiosk .kpi-card .description {
+    display: none !important;
+}
+body.kiosk .header {
+    padding: 0.5rem 1rem;
+}
+body.kiosk .header h1 {
+    font-size: 1rem;
+}
+body.kiosk .header .subtitle {
+    display: none;
+}
+body.kiosk .header-right {
+    font-size: 0.75rem;
+}
+body.kiosk .container {
+    padding: 0.5rem 0.75rem 0;
+    max-width: 100%;
+}
+body.kiosk .martini-stripe {
+    height: 3px;
+}
+body.kiosk .section {
+    display: none;
+    margin-bottom: 0;
+}
+body.kiosk .section.kiosk-active {
+    display: block;
+}
+body.kiosk .section-header {
+    margin-bottom: 0.4rem;
+    padding-bottom: 0.2rem;
+}
+body.kiosk .section-header h2 {
+    font-size: 0.85rem;
+}
+body.kiosk .kpi-row-hero {
+    grid-template-columns: repeat(5, 1fr);
+}
+body.kiosk .kpi-row {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.5rem;
+    margin-bottom: 0.4rem;
+}
+body.kiosk .kpi-card {
+    padding: 0.5rem 0.6rem;
+    min-height: 0;
+    border-radius: 6px;
+}
+body.kiosk .kpi-card .label {
+    font-size: 0.55rem;
+    margin-bottom: 0.1rem;
+}
+body.kiosk .kpi-card .value {
+    font-size: 1.5rem;
+    line-height: 1.2;
+}
+body.kiosk .kpi-card .unit {
+    font-size: 0.7rem;
+}
+body.kiosk .kpi-card .kpi-pct {
+    font-size: 0.65rem;
+}
+/* Charts in kiosk — shorter */
+body.kiosk .chart-wrap {
+    padding: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+body.kiosk .chart-wrap canvas {
+    max-height: 180px;
+}
+body.kiosk .chart-wrap h3 {
+    font-size: 0.65rem;
+    margin-bottom: 0.3rem;
+}
+/* Kiosk progress bar */
+.kiosk-progress {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    height: 3px;
+    background: var(--blue);
+    transition: width linear;
+    z-index: 100;
+}
+/* Kiosk section dots */
+.kiosk-dots {
+    position: fixed;
+    bottom: 6px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 6px;
+    z-index: 100;
+}
+.kiosk-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--silver);
+    border: none;
+    padding: 0;
+    cursor: pointer;
+}
+.kiosk-dot.active {
+    background: var(--blue);
+}
+
 /* -- Responsive ----------------------------------------------------------- */
 @media (max-width: 900px) {
     .kpi-grid { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
     .kpi-row { grid-template-columns: repeat(2, 1fr); }
+    .kpi-row-hero { grid-template-columns: repeat(3, 1fr); }
     .header { flex-direction: column; gap: 0.5rem; align-items: flex-start; }
     .container { padding: 1rem; }
     .comparison-grid { grid-template-columns: 1fr; }
@@ -1405,4 +1583,147 @@ body {
     background: #fff3cd;
     border-color: var(--yellow);
     color: #856404;
+}
+
+/* =========================================================================
+   Negative Price Alert Badge
+   ========================================================================= */
+
+.neg-alert-badge {
+    display: inline-block;
+    padding: 0.3rem 0.8rem;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    margin-left: 0.75rem;
+    animation: pulse 2s infinite;
+}
+
+/* =========================================================================
+   Bill Validator — Deviation Colors
+   ========================================================================= */
+
+.deviation-ok     { background: #d4edda; color: #155724; }
+.deviation-warn   { background: #fff3cd; color: #856404; }
+.deviation-error  { background: #f8d7da; color: #721c24; }
+
+.bill-compare-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+    margin-bottom: 1.5rem;
+}
+.bill-compare-table th {
+    text-align: left;
+    padding: 0.6rem 0.75rem;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    border-bottom: 2px solid #e0e0e0;
+}
+.bill-compare-table td {
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid #f0f0f0;
+}
+.bill-compare-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.bill-compare-table tr.total { font-weight: 700; border-top: 2px solid var(--navy); }
+
+/* =========================================================================
+   Amortització — Payback Progress Bar
+   ========================================================================= */
+
+.payback-bar-wrap {
+    background: #e9ecef;
+    border-radius: 10px;
+    height: 32px;
+    position: relative;
+    overflow: hidden;
+    margin: 1rem 0 1.5rem;
+}
+.payback-bar-fill {
+    height: 100%;
+    border-radius: 10px;
+    background: linear-gradient(90deg, var(--blue), var(--green));
+    transition: width 0.5s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--white);
+}
+.payback-bar-label {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--navy);
+}
+
+.amort-chart-wrap {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+}
+.amort-chart-wrap .chart-wrap canvas {
+    max-height: 350px;
+}
+
+/* -- Data table (shared) -------------------------------------------------- */
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+.data-table th {
+    background: var(--light-grey);
+    color: var(--navy);
+    font-weight: 700;
+    text-transform: uppercase;
+    font-size: 0.7rem;
+    letter-spacing: 0.05em;
+    padding: 0.6rem 0.8rem;
+    border-bottom: 2px solid #ddd;
+    text-align: left;
+}
+.data-table td {
+    padding: 0.5rem 0.8rem;
+    border-bottom: 1px solid #eee;
+}
+.data-table tbody tr:hover {
+    background: rgba(12,77,162,0.04);
+}
+
+/* -- Heatmap table -------------------------------------------------------- */
+.heatmap-table {
+    border-collapse: collapse;
+    font-size: 0.75rem;
+    width: 100%;
+}
+.heatmap-table th {
+    padding: 4px 2px;
+    text-align: center;
+    font-weight: 600;
+    color: var(--muted);
+    font-size: 0.65rem;
+}
+.heatmap-table td {
+    border: 1px solid #f0f0f0;
+}
+
+/* -- Recommendations list ------------------------------------------------- */
+.reco-list {
+    list-style: none;
+    padding: 0;
+}
+.reco-list li {
+    padding: 0.75rem 1rem;
+    margin-bottom: 0.5rem;
+    background: var(--light-grey);
+    border-left: 4px solid var(--blue);
+    border-radius: 4px;
+    font-size: 0.9rem;
 }

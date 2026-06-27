@@ -4,10 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Planta Solar{% endblock %} — Binomi Produccions</title>
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
     {% block head %}{% endblock %}
 </head>
-<body>
+<body{% if request.args.get('kiosk') %} class="kiosk"{% endif %}>
     <!-- Header -->
     <div class="header">
         <div class="header-left">
@@ -21,6 +22,10 @@
             <span><span class="live-dot"></span> En directe</span>
             <span>Actualitzat: <span id="last-update">{{ d.last_update if d is defined else '--:--:--' }}</span></span>
             {% endblock %}
+            <span class="period-badge" id="period-badge">
+                <span class="period-dot" id="period-dot"></span>
+                <span id="period-label">--</span>
+            </span>
         </div>
     </div>
 
@@ -34,6 +39,16 @@
         <a href="{{ url_for('comparador') }}" class="{% if request.endpoint == 'comparador' %}active{% endif %}">Comparador</a>
         <a href="{{ url_for('estadistiques') }}" class="{% if request.endpoint == 'estadistiques' %}active{% endif %}">Estad&iacute;stiques</a>
         <a href="{{ url_for('historic') }}" class="{% if request.endpoint == 'historic' %}active{% endif %}">Hist&ograve;ric</a>
+        <a href="{{ url_for('previsio_solar') }}" class="{% if request.endpoint == 'previsio_solar' %}active{% endif %}">&#9728; Previsi&oacute; Solar</a>
+        <a href="{{ url_for('amortitzacio') }}" class="{% if request.endpoint == 'amortitzacio' %}active{% endif %}">Amortitzaci&oacute;</a>
+        <a href="{{ url_for('recomanacions') }}" class="{% if request.endpoint == 'recomanacions' %}active{% endif %}">Recomanacions</a>
+        <a href="{{ url_for('optimitzador') }}" class="{% if request.endpoint == 'optimitzador' %}active{% endif %}">&#128202; MJF Hist&ograve;ric</a>
+        <a href="{{ url_for('programador') }}" class="{% if request.endpoint == 'programador' %}active{% endif %}">&#128197; Programador</a>
+        <a href="{{ url_for('consum_model') }}" class="{% if request.endpoint == 'consum_model' %}active{% endif %}">&#128200; Model Consum</a>
+        {# Vehicle Solar tab hidden — EV6 V2H not commercially available in EU 2026, see memory/ev6_v2h_review_2026_04_26.md #}
+        {# <a href="{{ url_for('vehicle_solar') }}" class="{% if request.endpoint == 'vehicle_solar' %}active{% endif %}">Vehicle Solar</a> #}
+        <a href="{{ url_for('consum_preus') }}" class="{% if request.endpoint == 'consum_preus' %}active{% endif %}">Consum i Preus</a>
+        <a href="{{ url_for('comparacio_anual') }}" class="{% if request.endpoint == 'comparacio_anual' %}active{% endif %}">Comparaci&oacute; Anual</a>
         <a href="{{ url_for('configuracio') }}" class="{% if request.endpoint in ('configuracio', 'save_configuracio') %}active{% endif %}">Configuraci&oacute;</a>
     </nav>
 
@@ -53,6 +68,68 @@
         Binomi Produccions SL &mdash; Planta Solar PIKO 15 + PIKO CI 50 &mdash; 65 kWp
     </div>
 
+    <script>
+    // Sticky nav shadow
+    (function() {
+        var nav = document.querySelector('.nav');
+        if (!nav) return;
+        var observer = new IntersectionObserver(function(entries) {
+            nav.classList.toggle('stuck', !entries[0].isIntersecting);
+        }, { threshold: 0 });
+        var sentinel = document.querySelector('.martini-stripe');
+        if (sentinel) observer.observe(sentinel);
+    })();
+    </script>
+    <script>
+    (function() {
+        var PERIOD_COLORS = {
+            P1: '#E63946', P2: '#E67E22', P3: '#f0ad4e',
+            P4: '#0C4DA2', P5: '#28a745', P6: '#6c757d'
+        };
+        var PERIOD_NAMES = {
+            P1: 'P1 Punta', P2: 'P2 Pla alt', P3: 'P3 Pla',
+            P4: 'P4 Pla baix', P5: 'P5 Vall', P6: 'P6 Supervall'
+        };
+
+        function updateClock() {
+            var el = document.getElementById('last-update');
+            if (el && (el.textContent === '--:--:--' || el.textContent === '')) {
+                el.textContent = new Date().toLocaleTimeString('ca-ES', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+            }
+        }
+        updateClock();
+
+        function updatePeriod() {
+            fetch('/api/current-period')
+                .then(function(r) { return r.json(); })
+                .then(function(d) {
+                    var p = d.period;
+                    var color = PERIOD_COLORS[p] || '#6c757d';
+                    // Update clock on pages without live data
+                    var el = document.getElementById('last-update');
+                    if (el) el.textContent = d.time || new Date().toLocaleTimeString('ca-ES');
+
+                    // Update badge
+                    var dot = document.getElementById('period-dot');
+                    var label = document.getElementById('period-label');
+                    if (dot) dot.style.background = color;
+                    if (label) label.textContent = PERIOD_NAMES[p] || p;
+
+                    // Update stripe
+                    var stripe = document.querySelector('.martini-stripe');
+                    if (stripe) {
+                        stripe.classList.add('period-active');
+                        stripe.style.setProperty('--period-color', color);
+                    }
+                })
+                .catch(function() {});
+        }
+
+        updatePeriod();
+        setInterval(updatePeriod, 60000);
+    })();
+    </script>
+    <script src="{{ url_for('static', filename='js/tooltips.js') }}"></script>
     {% block scripts %}{% endblock %}
 </body>
 </html>
