@@ -97,10 +97,18 @@
                 rate *= (1 - (offer.discount_energy_pct || 0) / 100);
                 energyCost += kwh * rate;
             } else {
-                rate = (omieByPeriod[p] || 0)
+                // Full contract formula: PH = mult × [(OMIE + other_costs) × (1 + losses) + FE + margin] + PTD + CA
+                var cf = data.contract_formula || {};
+                var mult = cf.adjustment_multiplier || 1.0;
+                var otherCosts = cf.other_costs_eur_kwh || 0;
+                var losses = cf.loss_coefficient || 0;
+                var fe = cf.efficiency_fund_eur_kwh || 0;
+                var margin = offer.margin_eur_kwh || 0;
+                var omie = omieByPeriod[p] || 0;
+                var formulaRate = mult * ((omie + otherCosts) * (1 + losses) + fe + margin);
+                rate = formulaRate
                     + (regulated.peajes[p] || 0)
-                    + (regulated.cargos[p] || 0)
-                    + (offer.margin_eur_kwh || 0);
+                    + (regulated.cargos[p] || 0);
                 energyCost += kwh * rate;
             }
         }
@@ -162,18 +170,32 @@
 
     function renderTimelines() {
         var info = data.period_info;
+
+        // 3.0TD monthly-rotating periods (Circular 3/2020 CNMC Peninsular)
+        // Peak/shoulder periods rotate by month group; nights + weekends = P6
+        var MONTH_GROUPS = {
+            1:  ['P1', 'P2'], 2:  ['P1', 'P2'],   // Group A
+            7:  ['P1', 'P2'], 12: ['P1', 'P2'],
+            3:  ['P2', 'P3'], 11: ['P2', 'P3'],    // Group B
+            6:  ['P3', 'P4'], 8:  ['P3', 'P4'],    // Group C
+            9:  ['P3', 'P4'],
+            4:  ['P4', 'P5'], 5:  ['P4', 'P5'],    // Group D
+            10: ['P4', 'P5']
+        };
+        var month = new Date().getMonth() + 1;
+        var group = MONTH_GROUPS[month] || ['P2', 'P3'];
+        var peak = group[0], shoulder = group[1];
+
         var weekday = [
-            { p: 'P5', start: 0, end: 8 },
-            { p: 'P2', start: 8, end: 10 },
-            { p: 'P1', start: 10, end: 14 },
-            { p: 'P2', start: 14, end: 18 },
-            { p: 'P3', start: 18, end: 22 },
-            { p: 'P5', start: 22, end: 24 }
+            { p: 'P6', start: 0, end: 8 },
+            { p: shoulder, start: 8, end: 10 },
+            { p: peak, start: 10, end: 14 },
+            { p: shoulder, start: 14, end: 18 },
+            { p: peak, start: 18, end: 22 },
+            { p: shoulder, start: 22, end: 24 }
         ];
         var saturday = [
-            { p: 'P5', start: 0, end: 8 },
-            { p: 'P4', start: 8, end: 18 },
-            { p: 'P5', start: 18, end: 24 }
+            { p: 'P6', start: 0, end: 24 }
         ];
         var sunday = [
             { p: 'P6', start: 0, end: 24 }

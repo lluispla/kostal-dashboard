@@ -3,9 +3,9 @@
     {
       "id": "iberdrola-fixa-actual",
       "supplier": "Iberdrola",
-      "name": "Tarifa fixa actual",
+      "name": "Tarifa fixa anterior",
       "type": "fixed",
-      "is_current": true,
+      "is_current": false,
       "energy_eur_kwh": {
         "P1": 0.153962,
         "P2": 0.153962,
@@ -179,7 +179,7 @@
       "supplier": "Som Energia",
       "name": "Indexada empresa (OF26017)",
       "type": "indexed",
-      "is_current": false,
+      "is_current": true,
       "energy_eur_kwh": null,
       "margin_eur_kwh": 0.009680,
       "power_charges_eur_kw_day": {

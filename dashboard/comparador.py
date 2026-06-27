@@ -175,12 +175,23 @@ def get_comparador_data():
     omie = get_omie_avg_by_period(months=3)
     offers = load_offers()
 
-    # Load regulated charges from pricing.json
+    # Load regulated charges and contract formula from pricing.json
+    contract_formula = {
+        "adjustment_multiplier": 1.0,
+        "other_costs_eur_kwh": 0.0,
+        "loss_coefficient": 0.0,
+        "efficiency_fund_eur_kwh": 0.0,
+    }
     try:
         with open(PRICING_PATH) as f:
             pricing = json.load(f)
         peajes = pricing["indexed_tariff"]["peajes_eur_kwh"]
         cargos = pricing["indexed_tariff"]["cargos_eur_kwh"]
+        # Contract formula for indexed tariff computation
+        cf = pricing.get("energy", {}).get("contract_formula", {})
+        for k in contract_formula:
+            if k in cf:
+                contract_formula[k] = cf[k]
     except (FileNotFoundError, KeyError, json.JSONDecodeError):
         peajes = {"P1": 0, "P2": 0, "P3": 0, "P4": 0, "P5": 0, "P6": 0}
         cargos = {"P1": 0, "P2": 0, "P3": 0, "P4": 0, "P5": 0, "P6": 0}
@@ -204,19 +215,26 @@ def get_comparador_data():
             "peajes": peajes,
             "cargos": cargos,
         },
-        "taxes": {"electricity_tax_pct": 5.11, "iva_pct": 21},
+        "contract_formula": contract_formula,
+        "taxes": {"electricity_tax_pct": 5.11269, "iva_pct": 21},
         "scenarios": {
             "real": actual["pct_by_period"],
-            "diurn": {"P1": 25, "P2": 30, "P3": 10, "P4": 10, "P5": 15, "P6": 10},
-            "nocturn": {"P1": 3, "P2": 5, "P3": 5, "P4": 2, "P5": 60, "P6": 25},
-            "uniforme": {"P1": 12, "P2": 18, "P3": 12, "P4": 6, "P5": 38, "P6": 14},
+            "diurn": {"P1": 15, "P2": 20, "P3": 15, "P4": 15, "P5": 5, "P6": 30},
+            "nocturn": {"P1": 2, "P2": 4, "P3": 3, "P4": 4, "P5": 2, "P6": 85},
+            "uniforme": {"P1": 8, "P2": 12, "P3": 10, "P4": 12, "P5": 6, "P6": 52},
         },
         "period_info": {
-            "P1": {"label": "Punta", "hours_week": 20, "schedule": "Dl-Dv 10-14h", "color": "#E63946"},
-            "P2": {"label": "Pla", "hours_week": 30, "schedule": "Dl-Dv 8-10h, 14-18h", "color": "#F4845F"},
-            "P3": {"label": "Pla vespre", "hours_week": 20, "schedule": "Dl-Dv 18-22h", "color": "#F0AD4E"},
-            "P4": {"label": "Dissabte", "hours_week": 10, "schedule": "Ds 8-18h", "color": "#0C4DA2"},
-            "P5": {"label": "Vall", "hours_week": 64, "schedule": "Dl-Dv 0-8h, 22-24h + Ds nit", "color": "#28A745"},
-            "P6": {"label": "Supervall", "hours_week": 24, "schedule": "Diumenge + festius", "color": "#17A589"},
+            "P1": {"label": "Punta", "hours_week": 40, "schedule": "Punta: Gen, Feb, Jul, Des", "color": "#E63946",
+                    "months": "Gen, Feb, Jul, Des", "type": "peak"},
+            "P2": {"label": "Pla alt", "hours_week": 40, "schedule": "Gen-Mar, Jul, Nov-Des", "color": "#F4845F",
+                    "months": "Gen-Mar, Jul, Nov-Des", "type": "peak+shoulder"},
+            "P3": {"label": "Pla", "hours_week": 40, "schedule": "Mar, Jun, Ago, Sep, Nov", "color": "#F0AD4E",
+                    "months": "Mar, Jun, Ago-Sep, Nov", "type": "peak+shoulder"},
+            "P4": {"label": "Pla baix", "hours_week": 40, "schedule": "Abr-Jun, Ago-Oct", "color": "#0C4DA2",
+                    "months": "Abr-Jun, Ago-Oct", "type": "peak+shoulder"},
+            "P5": {"label": "Vall", "hours_week": 40, "schedule": "Abr, Mai, Oct", "color": "#28A745",
+                    "months": "Abr, Mai, Oct", "type": "shoulder"},
+            "P6": {"label": "Supervall", "hours_week": 88, "schedule": "Nits 0-7h + caps de setmana + festius", "color": "#17A589",
+                    "months": "Tot l'any", "type": "valley"},
         },
     }

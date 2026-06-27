@@ -12,6 +12,119 @@
 
 {% block content %}
 
+<!-- Iberdrola vs Som Indexada — Real invoices comparison -->
+<div class="section" id="iber-comparison-section" style="display:none;">
+    <div class="section-header">
+        <span class="icon">&#128176;</span>
+        <h2>Factures Reals Iberdrola vs Som Energia Indexada</h2>
+    </div>
+
+    <!-- Full savings breakdown -->
+    <div id="multi-month-section" style="display:none; margin-bottom:1.5rem;">
+        <p class="section-help" style="margin-bottom:0.75rem;">
+            Basant-se en <span id="multi-days">--</span> dies de dades reals + factures Iberdrola (tot sense IVA).
+        </p>
+
+        <!-- The 3 big numbers -->
+        <div class="kpi-row">
+            <div class="kpi-card" style="background: linear-gradient(135deg, #e8f5e9, #c8e6c9);">
+                <div class="label">ESTALVI TOTAL ANUAL</div>
+                <div class="value val-green" id="total-saving" style="font-size:2rem;">--</div>
+                <div class="kpi-pct val-muted">Solar + tarifa combinats</div>
+            </div>
+            <div class="kpi-card">
+                <div class="label">&#9728; Autoconsum solar</div>
+                <div class="value val-blue" id="solar-saving" style="font-size:1.5rem;">--</div>
+                <div class="kpi-pct" id="solar-saving-pct" style="color:var(--muted);">--</div>
+            </div>
+            <div class="kpi-card">
+                <div class="label">&#9889; Difer&egrave;ncia tarifa</div>
+                <div class="value val-navy" id="tariff-saving" style="font-size:1.5rem;">--</div>
+                <div class="kpi-pct" id="tariff-saving-pct" style="color:var(--muted);">--</div>
+            </div>
+        </div>
+
+        <!-- Before vs after + payback -->
+        <div class="kpi-row" style="margin-top:0.75rem;">
+            <div class="kpi-card">
+                <div class="label">Abans (Iberdrola, sense solar)</div>
+                <div class="value val-red" id="before-cost" style="font-size:1.4rem;">--</div>
+                <div class="kpi-pct val-muted">12 mesos factures reals</div>
+            </div>
+            <div class="kpi-card">
+                <div class="label">Ara (Som Indexada + solar)</div>
+                <div class="value val-green" id="after-cost" style="font-size:1.4rem;">--</div>
+                <div class="kpi-pct val-muted" id="after-cost-label">anualitzat de dades reals</div>
+            </div>
+            <div class="kpi-card">
+                <div class="label">Retorn inversi&oacute; (50.000 &euro;)</div>
+                <div class="value val-navy" id="payback" style="font-size:1.5rem;">--</div>
+                <div class="kpi-pct val-muted">anys per recuperar</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Single-month detail (secondary) -->
+    <details style="margin-bottom:1rem;">
+        <summary style="cursor:pointer; color:var(--muted); font-size:0.85rem;">Detall: estimaci&oacute; mes actual vs Iberdrola</summary>
+        <div class="kpi-row" style="margin-top:0.75rem;">
+            <div class="kpi-card">
+                <div class="label">Mitjana Iberdrola (real, sense IVA)</div>
+                <div class="value val-red" id="iber-avg" style="font-size:1.3rem;">--</div>
+            </div>
+            <div class="kpi-card">
+                <div class="label">Estimaci&oacute; Som (mes actual)</div>
+                <div class="value val-green" id="iber-som" style="font-size:1.3rem;">--</div>
+                <div class="kpi-pct val-muted" id="iber-som-label">projectat mes actual</div>
+            </div>
+            <div class="kpi-card">
+                <div class="label">Estalvi mensual</div>
+                <div class="value val-green" id="iber-savings-month" style="font-size:1.3rem;">--</div>
+            </div>
+            <div class="kpi-card">
+                <div class="label">Estalvi anual (1 mes &times; 12)</div>
+                <div class="value val-navy" id="iber-savings-annual" style="font-size:1.3rem;">--</div>
+                <div class="kpi-pct val-muted" id="iber-savings-pct">--</div>
+            </div>
+        </div>
+    </details>
+
+    <!-- Chart -->
+    <div class="chart-wrap" style="margin-top: 1.25rem;">
+        <div style="height: 320px;">
+            <canvas id="chart-iber-comparison"></canvas>
+        </div>
+    </div>
+</div>
+
+<div class="martini-stripe-thin" id="iber-stripe" style="display:none;"></div>
+
+<!-- Calibration evolution -->
+<div class="section" id="calibration-section" style="display:none;">
+    <div class="section-header">
+        <span class="icon">&#128200;</span>
+        <h2>Evoluci&oacute; del par&agrave;metre &ldquo;other costs&rdquo;</h2>
+    </div>
+    <p class="section-help">Costos addicionals de mercat (Pc+Sc+Dsv+GdO+POsOm) calculats a partir de cada factura + CSV. Si puja, el mercat s'encareix independentment de l'OMIE.</p>
+    <div class="kpi-row">
+        <div class="kpi-card">
+            <div class="label">Other costs actual</div>
+            <div class="value val-navy"><span id="cal-current-oc">--</span><span class="unit">&euro;/kWh</span></div>
+        </div>
+        <div class="kpi-card">
+            <div class="label">Factor KSEM actual</div>
+            <div class="value val-navy"><span id="cal-current-ksem">--</span></div>
+        </div>
+        <div class="kpi-card">
+            <div class="label">Calibracions</div>
+            <div class="value val-navy"><span id="cal-count">--</span></div>
+        </div>
+    </div>
+    <div style="position:relative; height:280px; background:white; border:1px solid #eee; border-radius:8px; padding:1rem; margin-top:1rem;">
+        <canvas id="chart-calibration"></canvas>
+    </div>
+</div>
+
 <!-- Data quality warning -->
 {% if d.low_data %}
 <div class="flash-error" style="margin-bottom: 1.5rem;">
@@ -28,8 +141,8 @@
         <span class="icon">&#9312;</span>
         <h2>Horaris 3.0TD &mdash; Com es distribueix el consum</h2>
     </div>
-    <p class="section-help">Cada hora del dia pertany a un per&iacute;ode (P1-P6).
-        El preu varia seg&uacute;ns el per&iacute;ode &mdash; P1 &eacute;s el m&eacute;s car, P6 el m&eacute;s barat.</p>
+    <p class="section-help">Cada hora del dia pertany a un per&iacute;ode (P1-P6) que rota segons el mes (Circular 3/2020 CNMC).
+        P1 &eacute;s el m&eacute;s car, P6 el m&eacute;s barat. Nits (0-7h), caps de setmana i festius s&oacute;n sempre P6.</p>
 
     <div class="timeline-container">
         <div class="timeline-row">
@@ -256,4 +369,178 @@
     var comparadorData = {{ d|tojson }};
 </script>
 <script src="{{ url_for('static', filename='js/comparador.js') }}"></script>
+<script>
+(function() {
+    fetch('/api/iberdrola-comparison')
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            if (!d.has_data) return;
+
+            // Full savings breakdown
+            if (d.total_saving !== null && d.multi_days > 7) {
+                document.getElementById('multi-month-section').style.display = '';
+                document.getElementById('multi-days').textContent = d.multi_days;
+
+                // The 3 big numbers
+                document.getElementById('total-saving').innerHTML = fmt(d.total_saving) + ' <span class="unit">\u20ac/any</span>';
+
+                document.getElementById('solar-saving').innerHTML = fmt(d.solar_saving) + ' <span class="unit">\u20ac/any</span>';
+                var solPct = d.total_saving > 0 ? Math.round(d.solar_saving / d.total_saving * 100) : 0;
+                document.getElementById('solar-saving-pct').textContent = solPct + '% del total';
+
+                document.getElementById('tariff-saving').innerHTML = fmt(d.tariff_saving) + ' <span class="unit">\u20ac/any</span>';
+                var tarPct = d.total_saving > 0 ? Math.round(d.tariff_saving / d.total_saving * 100) : 0;
+                document.getElementById('tariff-saving-pct').textContent = tarPct + '% del total';
+
+                // Before vs after
+                document.getElementById('before-cost').innerHTML = fmt(d.total_iberdrola_12m) + ' <span class="unit">\u20ac/any</span>';
+                document.getElementById('after-cost').innerHTML = fmt(d.multi_som_annual) + ' <span class="unit">\u20ac/any</span>';
+
+                // Payback
+                if (d.payback_years) {
+                    document.getElementById('payback').innerHTML = d.payback_years + ' <span class="unit">anys</span>';
+                }
+            }
+            document.getElementById('iber-comparison-section').style.display = '';
+            document.getElementById('iber-stripe').style.display = '';
+
+            function fmt(v) { return v.toLocaleString('ca', {minimumFractionDigits: 2, maximumFractionDigits: 2}); }
+
+            document.getElementById('iber-avg').innerHTML = fmt(d.avg_iberdrola) + ' <span class="unit">\u20ac/mes</span>';
+            document.getElementById('iber-som').innerHTML = fmt(d.som_current_month) + ' <span class="unit">\u20ac/mes</span>';
+            document.getElementById('iber-som-label').textContent = 'projectat ' + d.som_current_month_label;
+            document.getElementById('iber-savings-month').innerHTML = fmt(d.monthly_savings) + ' <span class="unit">\u20ac/mes</span>';
+            document.getElementById('iber-savings-annual').innerHTML = fmt(d.annual_savings) + ' <span class="unit">\u20ac/any</span>';
+            document.getElementById('iber-savings-pct').textContent = d.savings_pct + '% menys que Iberdrola';
+
+            // Chart
+            var canvas = document.getElementById('chart-iber-comparison');
+            if (!canvas || !d.invoices.length) return;
+
+            var labels = d.invoices.map(function(i) { return i.period; });
+            var iberData = d.invoices.map(function(i) { return i.iberdrola; });
+            var somLine = labels.map(function() { return d.som_current_month; });
+
+            new Chart(canvas, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Iberdrola Fix (real, sense IVA)',
+                            data: iberData,
+                            backgroundColor: '#E6394699',
+                            borderColor: '#E63946',
+                            borderWidth: 1,
+                            borderRadius: 4,
+                        },
+                        {
+                            label: 'Som Indexada (estimaci\u00f3, sense IVA)',
+                            data: somLine,
+                            type: 'line',
+                            borderColor: '#28a745',
+                            borderWidth: 3,
+                            borderDash: [8, 4],
+                            pointRadius: 0,
+                            fill: false,
+                        },
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: { position: 'top', labels: { usePointStyle: true, boxWidth: 8 } },
+                        tooltip: {
+                            callbacks: {
+                                label: function(ctx) {
+                                    return ctx.dataset.label + ': ' + ctx.parsed.y.toFixed(2) + ' \u20ac';
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: { grid: { display: false }, ticks: { color: '#6c757d' } },
+                        y: {
+                            title: { display: true, text: 'EUR/mes (sense IVA)' },
+                            ticks: { color: '#6c757d', callback: function(v) { return v.toFixed(0) + ' \u20ac'; } },
+                            grid: { color: '#f0f0f0' },
+                        },
+                    },
+                }
+            });
+        });
+})();
+</script>
+<script>
+(function() {
+    fetch('/api/calibration-history')
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            if (!d.history || d.history.length === 0) return;
+            document.getElementById('calibration-section').style.display = '';
+            document.getElementById('cal-current-oc').textContent = d.current_other_costs.toFixed(4);
+            document.getElementById('cal-current-ksem').textContent = d.current_ksem_overall.toFixed(3);
+            document.getElementById('cal-count').textContent = d.history.length;
+
+            var labels = [], oc = [], ksem = [];
+            d.history.forEach(function(h) {
+                labels.push(h.period.split(' to ')[0]);
+                oc.push(h.other_costs || null);
+                ksem.push(h.ksem_overall || null);
+            });
+
+            var ctx = document.getElementById('chart-calibration').getContext('2d');
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Other costs (EUR/kWh)',
+                            data: oc,
+                            backgroundColor: '#E6394699',
+                            borderColor: '#E63946',
+                            borderWidth: 1,
+                            borderRadius: 4,
+                            yAxisID: 'y',
+                        },
+                        {
+                            label: 'Factor KSEM',
+                            data: ksem,
+                            type: 'line',
+                            borderColor: '#0C4DA2',
+                            backgroundColor: 'transparent',
+                            pointRadius: 5,
+                            pointBackgroundColor: '#0C4DA2',
+                            borderWidth: 2,
+                            yAxisID: 'y1',
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: true, position: 'bottom' },
+                    },
+                    scales: {
+                        y: {
+                            title: { display: true, text: 'Other costs (EUR/kWh)' },
+                            beginAtZero: true,
+                            ticks: { callback: function(v) { return v.toFixed(3); } },
+                        },
+                        y1: {
+                            position: 'right',
+                            title: { display: true, text: 'Factor KSEM' },
+                            min: 1.0, max: 1.3,
+                            grid: { drawOnChartArea: false },
+                        },
+                    },
+                }
+            });
+        });
+})();
+</script>
 {% endblock %}

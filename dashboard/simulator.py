@@ -16,36 +16,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
 from config import INFLUXDB_BUCKET, PRICING_PATH
-from data import _hourly_records, _q, _CET
-
-# ---------------------------------------------------------------------------
-# 3.0TD correct rotating period mapping (from binomi calculator.py)
-# ---------------------------------------------------------------------------
-
-PEAK_HOURS = {10, 11, 12, 13, 18, 19, 20, 21}
-SHOULDER_HOURS = {8, 9, 14, 15, 16, 17, 22, 23}
-
-# month -> (peak_period, shoulder_period); night + weekends = P6
-MONTH_TO_PERIODS = {
-    1:  ("P1", "P2"),  2:  ("P1", "P2"),   # Group A
-    7:  ("P1", "P2"),  12: ("P1", "P2"),
-    3:  ("P2", "P3"),  11: ("P2", "P3"),    # Group B
-    6:  ("P3", "P4"),  8:  ("P3", "P4"),    # Group C
-    9:  ("P3", "P4"),
-    4:  ("P4", "P5"),  5:  ("P4", "P5"),    # Group D
-    10: ("P4", "P5"),
-}
-
-
-def get_period(hour, month, is_weekend):
-    """Return 3.0TD period (P1-P6) with correct monthly rotation."""
-    if is_weekend:
-        return "P6"
-    if hour in PEAK_HOURS:
-        return MONTH_TO_PERIODS[month][0]
-    if hour in SHOULDER_HOURS:
-        return MONTH_TO_PERIODS[month][1]
-    return "P6"  # night (0-8h)
+from data import _hourly_records, _q, _CET, _get_period
 
 
 # ---------------------------------------------------------------------------
@@ -181,13 +152,15 @@ def simulate(time_range="3m"):
     # Shared parameters
     contracted_power = pricing["contracted_power_kw"]
     elec_tax_pct = pricing["taxes"]["electricity_tax_pct"]
+    elec_tax_per_kwh = pricing["taxes"].get("electricity_tax_eur_kwh")
     iva_pct = pricing["taxes"]["iva_pct"]
     equipment_rental = pricing["fixed_charges_eur_day"]["equipment_rental"]
     bono_social = pricing["fixed_charges_eur_day"]["bono_social"]
 
     # Power charges per scenario
-    iber_pwr = sc_iber.get("power_charges_eur_kw_day", pricing["power_charges_eur_kw_day"])
-    hola_pwr = sc_hola.get("power_charges_eur_kw_day", pricing["power_charges_eur_kw_day"])
+    _default_pwr_day = {f"P{i}": 0.0 for i in range(1, 7)}
+    iber_pwr = sc_iber.get("power_charges_eur_kw_day", _default_pwr_day)
+    hola_pwr = sc_hola.get("power_charges_eur_kw_day", _default_pwr_day)
     sper_pwr_year = sc_sper.get("power_charges_eur_kw_year", {})
     sidx_pwr_year = sc_sidx.get("power_charges_eur_kw_year", sper_pwr_year)
 
@@ -214,9 +187,7 @@ def simulate(time_range="3m"):
         exp_kwh = export_by_hour.get(hour, 0.0)
         omie_price = omie_by_hour.get(hour, None)
 
-        month_num = hour.month
-        is_weekend = hour.weekday() >= 5
-        period = get_period(hour.hour, month_num, is_weekend)
+        period = _get_period(hour)
         ym = hour.strftime("%Y-%m")
 
         md = monthly_data[ym]
@@ -281,17 +252,20 @@ def simulate(time_range="3m"):
         return cost
 
     # --- Bill computation per Spanish regulation ---
-    def _compute_bill(energy_cost, surplus_value, power_cost, days):
+    def _compute_bill(energy_cost, surplus_value, power_cost, days, import_kwh=0.0):
         """Compute bill following Spanish regulation.
 
         1. compensated = min(energy_term, surplus_value) — surplus can't reduce energy below 0
         2. subtotal = (energy - compensated) + power_cost
-        3. IEE = subtotal * 5.11%
-        4. total = (subtotal + IEE + fixed_charges) * 1.21
+        3. IEE = import_kwh × per_kwh_rate if Art 99.2 applies, else subtotal × pct
+        4. total = (subtotal + IEE + fixed_charges) × (1 + IVA)
         """
         compensated = min(energy_cost, surplus_value)
         subtotal = (energy_cost - compensated) + power_cost
-        iee = subtotal * elec_tax_pct / 100
+        if elec_tax_per_kwh is not None:
+            iee = import_kwh * elec_tax_per_kwh
+        else:
+            iee = subtotal * elec_tax_pct / 100
         extras = (equipment_rental + bono_social) * days
         total = (subtotal + iee + extras) * (1 + iva_pct / 100)
         return round(total, 2), compensated
@@ -316,10 +290,11 @@ def simulate(time_range="3m"):
         pwr_sidx = _power_cost_som(sidx_pwr_year, days)
 
         # Bills
-        iber_total, iber_comp = _compute_bill(md["energy_iber"], md["surplus_iber"], pwr_iber, days)
-        hola_total, hola_comp = _compute_bill(md["energy_hola"], md["surplus_hola"], pwr_hola, days)
-        sper_total, sper_comp = _compute_bill(md["energy_sper"], md["surplus_sper"], pwr_sper, days)
-        sidx_total, sidx_comp = _compute_bill(md["energy_sidx"], md["surplus_sidx"], pwr_sidx, days)
+        imp = md["import_kwh"]
+        iber_total, iber_comp = _compute_bill(md["energy_iber"], md["surplus_iber"], pwr_iber, days, imp)
+        hola_total, hola_comp = _compute_bill(md["energy_hola"], md["surplus_hola"], pwr_hola, days, imp)
+        sper_total, sper_comp = _compute_bill(md["energy_sper"], md["surplus_sper"], pwr_sper, days, imp)
+        sidx_total, sidx_comp = _compute_bill(md["energy_sidx"], md["surplus_sidx"], pwr_sidx, days, imp)
 
         # Flux Solar (Scenario 3 only)
         non_compensated = max(0, md["surplus_sidx"] - md["energy_sidx"])
@@ -402,6 +377,7 @@ def simulate(time_range="3m"):
         elec_tax_pct, iva_pct, equipment_rental, bono_social,
         avg_omie_mwh,
         cf_mult, cf_other, cf_losses, cf_fe,
+        elec_tax_per_kwh,
     )
 
     return {
@@ -424,6 +400,7 @@ def _calculate_breakeven(
     elec_tax_pct, iva_pct, equipment_rental, bono_social,
     current_avg_mwh,
     cf_mult=1.0, cf_other=0.0, cf_losses=0.0, cf_fe=0.0,
+    elec_tax_per_kwh=None,
 ):
     """Binary search for OMIE multiplier where Som Indexada total == Iberdrola total."""
     if not import_by_hour or not omie_by_hour:
@@ -439,7 +416,7 @@ def _calculate_breakeven(
         monthly = defaultdict(lambda: {
             "energy_iber": 0.0, "energy_sidx": 0.0,
             "surplus_iber": 0.0, "surplus_sidx": 0.0,
-            "export_kwh": 0.0, "dates": set(),
+            "export_kwh": 0.0, "import_kwh": 0.0, "dates": set(),
         })
 
         for hour in sorted(set(import_by_hour.keys()) & set(omie_by_hour.keys())):
@@ -447,15 +424,14 @@ def _calculate_breakeven(
             if imp_kwh <= 0:
                 continue
             omie_price = omie_by_hour[hour] * mult
-            month_num = hour.month
-            is_weekend = hour.weekday() >= 5
-            period = get_period(hour.hour, month_num, is_weekend)
+            period = _get_period(hour)
             ym = hour.strftime("%Y-%m")
             md = monthly[ym]
             md["dates"].add(hour.date())
             inner = (omie_price + cf_other) * (1 + cf_losses) + cf_fe + idx_margin
             md["energy_sidx"] += imp_kwh * (cf_mult * inner + peajes[period] + cargos[period])
             md["energy_iber"] += imp_kwh * iber_rates.get(period, 0.153962)
+            md["import_kwh"] += imp_kwh
 
         for hour, kwh in export_by_hour.items():
             ym = hour.strftime("%Y-%m")
@@ -487,7 +463,10 @@ def _calculate_breakeven(
             ]:
                 compensated = min(energy, surplus)
                 subtotal = (energy - compensated) + pwr
-                iee = subtotal * elec_tax_pct / 100
+                if elec_tax_per_kwh is not None:
+                    iee = md["import_kwh"] * elec_tax_per_kwh
+                else:
+                    iee = subtotal * elec_tax_pct / 100
                 extras = (equipment_rental + bono_social) * days
                 total = (subtotal + iee + extras) * (1 + iva_pct / 100)
                 if label == "iber":
