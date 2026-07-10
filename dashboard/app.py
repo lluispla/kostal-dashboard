@@ -604,4 +604,8 @@ if __name__ == "__main__":
     except Exception:
         import logging
         logging.exception("Failed to start consumption_model daily thread")
-    app.run(host="0.0.0.0", port=5000, debug=False)
+    # threaded=True: the dev server otherwise serves one request at a time, so a
+    # single slow InfluxDB query (cold /api/dashboard ~3.7s) blocks the page load and
+    # every other tab/refresh behind it — the UI freezes, then "suddenly works" when
+    # the query finishes. Concurrent handling keeps the UI responsive during slow queries.
+    app.run(host="0.0.0.0", port=5000, debug=False, threaded=True)
