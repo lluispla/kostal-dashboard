@@ -51,6 +51,42 @@
 
 <div class="martini-stripe-thin" style="margin-bottom: 1.5rem;"></div>
 
+<!-- LCOE: cost real del kWh solar -->
+<div class="section">
+    <div class="section-header">
+        <span class="icon">&#9728;</span>
+        <h2>Cost Real del kWh Solar (LCOE)</h2>
+    </div>
+
+    <div class="kpi-row">
+        <div class="kpi-card" style="border: 2px solid var(--green);">
+            <div class="label">Cost solar (vida &uacute;til)</div>
+            <div class="value val-green" id="lcoe-lifetime">--</div>
+            <div class="kpi-pct val-muted" id="lcoe-basis">--</div>
+        </div>
+        <div class="kpi-card">
+            <div class="label">Cost per kWh produ&iuml;t (fins ara)</div>
+            <div class="value val-navy" id="lcoe-todate">--</div>
+            <div class="kpi-pct val-muted">baixa cada mes cap al LCOE</div>
+        </div>
+        <div class="kpi-card">
+            <div class="label">Ref. disseny (spec)</div>
+            <div class="value val-blue" id="lcoe-spec">--</div>
+            <div class="kpi-pct val-muted" id="lcoe-kwp">--</div>
+        </div>
+        <div class="kpi-card" style="grid-column: span 1; background: var(--light-grey);">
+            <div class="label" style="font-size: 0.8rem;">Preu carregador Autel</div>
+            <p style="font-size: 0.82rem; color: var(--muted); line-height: 1.45; text-align: left; margin: 0.4rem 0 0;">
+                Carregant amb <strong>sol excedentari</strong>, el cost real del kWh &eacute;s el
+                <strong style="color: var(--green);">LCOE</strong> (amortitzaci&oacute; dels panells),
+                no el preu de xarxa (~0,12&nbsp;&euro;). El combustible marginal &eacute;s ~0&nbsp;&euro;.
+            </p>
+        </div>
+    </div>
+</div>
+
+<div class="martini-stripe-thin" style="margin-bottom: 1.5rem;"></div>
+
 <!-- Dual perspective KPIs -->
 <div class="section">
     <div class="section-header">

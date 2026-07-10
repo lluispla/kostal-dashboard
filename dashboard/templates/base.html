@@ -46,7 +46,7 @@
         <a href="{{ url_for('programador') }}" class="{% if request.endpoint == 'programador' %}active{% endif %}">&#128197; Programador</a>
         <a href="{{ url_for('consum_model') }}" class="{% if request.endpoint == 'consum_model' %}active{% endif %}">&#128200; Model Consum</a>
         {# Vehicle Solar tab hidden — EV6 V2H not commercially available in EU 2026, see memory/ev6_v2h_review_2026_04_26.md #}
-        {# <a href="{{ url_for('vehicle_solar') }}" class="{% if request.endpoint == 'vehicle_solar' %}active{% endif %}">Vehicle Solar</a> #}
+        <a href="{{ url_for('vehicle_solar') }}" class="{% if request.endpoint == 'vehicle_solar' %}active{% endif %}">&#128663; Vehicle Solar</a>
         <a href="{{ url_for('consum_preus') }}" class="{% if request.endpoint == 'consum_preus' %}active{% endif %}">Consum i Preus</a>
         <a href="{{ url_for('comparacio_anual') }}" class="{% if request.endpoint == 'comparacio_anual' %}active{% endif %}">Comparaci&oacute; Anual</a>
         <a href="{{ url_for('configuracio') }}" class="{% if request.endpoint in ('configuracio', 'save_configuracio') %}active{% endif %}">Configuraci&oacute;</a>

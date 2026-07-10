@@ -33,29 +33,91 @@ const periodBandsPlugin = {
     },
 };
 
-// Chart.js plugin: paint the recommended window as a green band on top
+// Chart.js plugin: paint the recommended window as a green band + a label box
+// spelling out the hours the window ACTUALLY bills. The band edge lines up with
+// the price dot of the *next* (excluded) hour, so users read the end-edge price
+// as if the window paid it — it doesn't. The label states the true last billed
+// hour + its rate + the total, removing that ambiguity.
+function _bestWindowSpan(chart, opts) {
+    const horizon = opts.horizon, best = opts.best;
+    if (!horizon || !best) return null;
+    const startIdx = horizon.findIndex(h => h.hour === best.start);
+    if (startIdx < 0) return null;
+    const endIdx = Math.min(horizon.length - 1, startIdx + (opts.duration || 1) - 1);
+    const xScale = chart.scales.x;
+    if (!xScale || !chart.chartArea) return null;
+    const x0 = xScale.getPixelForValue(startIdx);
+    const x1 = endIdx + 1 < horizon.length
+        ? xScale.getPixelForValue(endIdx + 1)
+        : chart.chartArea.right;
+    return { x0, x1 };
+}
+
+function _hm(iso) {
+    return new Date(iso).toLocaleTimeString('ca-ES', { hour: '2-digit', minute: '2-digit' });
+}
+
 const bestWindowPlugin = {
     id: 'bestWindow',
     beforeDatasetsDraw(chart, args, opts) {
-        const horizon = opts.horizon;
-        const best = opts.best;
-        if (!horizon || !best) return;
-        const startIdx = horizon.findIndex(h => h.hour === best.start);
-        if (startIdx < 0) return;
-        const endIdx = Math.min(horizon.length - 1, startIdx + (opts.duration || 1) - 1);
-        const { ctx, chartArea, scales } = chart;
-        const xScale = scales.x;
-        if (!xScale || !chartArea) return;
-        const x0 = xScale.getPixelForValue(startIdx);
-        const x1 = endIdx + 1 < horizon.length
-            ? xScale.getPixelForValue(endIdx + 1)
-            : chartArea.right;
+        const span = _bestWindowSpan(chart, opts);
+        if (!span) return;
+        const { ctx, chartArea } = chart;
         ctx.save();
         ctx.fillStyle = 'rgba(40, 167, 69, 0.18)';
-        ctx.fillRect(x0, chartArea.top, x1 - x0, chartArea.bottom - chartArea.top);
+        ctx.fillRect(span.x0, chartArea.top, span.x1 - span.x0, chartArea.bottom - chartArea.top);
         ctx.strokeStyle = 'rgba(40, 167, 69, 0.85)';
         ctx.lineWidth = 2;
-        ctx.strokeRect(x0, chartArea.top, x1 - x0, chartArea.bottom - chartArea.top);
+        ctx.strokeRect(span.x0, chartArea.top, span.x1 - span.x0, chartArea.bottom - chartArea.top);
+        ctx.restore();
+    },
+    // Drawn AFTER the datasets so the orange solar fill doesn't cover the label.
+    afterDatasetsDraw(chart, args, opts) {
+        const span = _bestWindowSpan(chart, opts);
+        if (!span) return;
+        const best = opts.best;
+        const { ctx, chartArea } = chart;
+        const hrs = best.hours || [];
+        const last = hrs.length ? hrs[hrs.length - 1] : null;
+
+        const lines = [
+            `Finestra recomanada: ${_hm(best.start)}→${_hm(best.end)}`,
+            `${opts.duration || hrs.length} h · xarxa ${best.grid_kwh} kWh · solar ${best.solar_kwh} kWh`,
+            `Total ${best.total_cost_eur.toFixed(2)} € (IEE + IVA)`,
+        ];
+        if (last) {
+            const lh1 = new Date(new Date(last.hour).getTime() + 3600 * 1000).toISOString();
+            lines.push(`darrera hora ${_hm(last.hour)}–${_hm(lh1)} @ ${last.rate_eur_kwh.toFixed(3)} €/kWh`);
+        }
+
+        ctx.save();
+        const padX = 7, padY = 6, lineH = 15;
+        ctx.font = '11px sans-serif';
+        let maxw = 0;
+        for (let i = 0; i < lines.length; i++) {
+            ctx.font = (i === 0 ? 'bold ' : '') + '11px sans-serif';
+            maxw = Math.max(maxw, ctx.measureText(lines[i]).width);
+        }
+        const boxW = maxw + padX * 2;
+        const boxH = lines.length * lineH + padY * 2;
+        // Anchor at the band's left edge, clamped inside the plot area.
+        let bx = span.x0 + 5;
+        if (bx + boxW > chartArea.right) bx = chartArea.right - boxW - 5;
+        if (bx < chartArea.left) bx = chartArea.left + 5;
+        const by = chartArea.top + 5;
+
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.93)';
+        ctx.strokeStyle = 'rgba(40, 167, 69, 0.9)';
+        ctx.lineWidth = 1;
+        ctx.fillRect(bx, by, boxW, boxH);
+        ctx.strokeRect(bx, by, boxW, boxH);
+
+        ctx.fillStyle = '#1a7431';
+        ctx.textBaseline = 'top';
+        for (let i = 0; i < lines.length; i++) {
+            ctx.font = (i === 0 ? 'bold ' : '') + '11px sans-serif';
+            ctx.fillText(lines[i], bx + padX, by + padY + i * lineH);
+        }
         ctx.restore();
     },
 };

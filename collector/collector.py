@@ -300,11 +300,16 @@ CI_FLOAT_REGS = {
     278: "dc_current_string2",
     280: "dc_power_string2",
     286: "dc_voltage_string3",
-    288: "dc_current_string3",
-    290: "dc_power_string3",
-    296: "dc_voltage_string4",
-    298: "dc_current_string4",
-    300: "dc_power_string4",
+    # Strings 3 & 4 do NOT follow the +10 stride of strings 1/2 on this CI 50
+    # firmware. Correct current/power registers found by live solar-noon scan
+    # 2026-07-03 (validated: per-string V*I≈P AND Σ(p_s1..s4)≈dc_power_total to
+    # 99.9%). The old guessed map (288/290 + 296/298/300) read 0 and produced
+    # false "string 3 dead / string 4 unconnected" alerts. See scan_ci_strings.py.
+    258: "dc_current_string3",
+    260: "dc_power_string3",
+    308: "dc_voltage_string4",
+    300: "dc_current_string4",
+    302: "dc_power_string4",
 }
 
 CI_STATUS_REG = 56  # uint16, single register

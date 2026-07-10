@@ -170,7 +170,10 @@
     "installation_date": "2026-02-26",
     "expected_lifetime_years": 25,
     "annual_maintenance_eur": 0,
-    "iberdrola_real_monthly_avg_eur": 2067
+    "iberdrola_real_monthly_avg_eur": 2067,
+    "system_kwp": 62,
+    "spec_yield_kwh_per_kwp": 1500,
+    "panel_degradation_pct_year": 0.5
   },
   "battery_simulation": {
     "capacity_kwh": 20,
@@ -405,6 +408,27 @@
         "credit_pct": 0.8
       }
     }
+  },
+  "solar_forecast": {
+    "_comment": "PV production-forecast geometry (feeds /previsio-solar + /programador). model: 'v2' = geometry+temp-corrected MULTI-ARRAY, 'legacy' = original due-south. azimuth_deg is OPEN-METEO convention (0=south, NEGATIVE=east, POSITIVE=west). The plant has TWO differently-oriented arrays, so v2 sums one plane per array (see 'arrays'); the top-level tilt/azimuth are only the single-plane fallback. Refit 2026-07-04 per inverter via pvlib (dashboard/tools/fit_solar_geometry.py): CI-50 ~12 deg EAST/tilt 35 (peaks ~13:15), PIKO-15 ~15 deg WEST/tilt 18 (low-tilt afternoon plateau, peaks ~15:00). Per-array kWp calibrated so modelled clear-day energy matches measured (CI-50 ~228 kWh, PIKO-15 ~104 kWh). The prior single CI-50-only geometry over-predicted morning and cut the evening tail short, skewing /programador start times early.",
+    "model": "v2",
+    "lat": 42.12,
+    "lon": 3.13,
+    "kwp_nameplate": 65.0,
+    "tilt_deg": 35,
+    "azimuth_deg": -12,
+    "temp_coeff_per_c": -0.0035,
+    "noct_c": 45,
+    "rated_efficiency": 0.80,
+    "low_light_knee_w": 500.0,
+    "low_light_exp": 0.40,
+    "arrays": [
+      {"name": "ci50", "inverter": "piko_ci_50", "tilt_deg": 35, "azimuth_deg": -12, "kwp": 44.0},
+      {"name": "piko15", "inverter": "piko_15", "tilt_deg": 18, "azimuth_deg": 15, "kwp": 18.0}
+    ],
+    "fitted_on": "2026-07-04",
+    "fit_days_ci50": ["2026-05-26", "2026-05-27", "2026-05-28", "2026-05-29", "2026-05-31", "2026-06-11", "2026-06-14", "2026-06-16", "2026-06-17", "2026-06-22", "2026-06-26", "2026-06-27", "2026-06-30", "2026-07-01"],
+    "fit_days_piko15": ["2026-04-23", "2026-04-28", "2026-05-28", "2026-05-29", "2026-05-30", "2026-06-12", "2026-06-16", "2026-06-17", "2026-06-22", "2026-06-24", "2026-06-30", "2026-07-01", "2026-07-02", "2026-07-03"]
   },
   "ksem_calibration": {
     "factors": {

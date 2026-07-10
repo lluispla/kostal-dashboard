@@ -41,6 +41,25 @@
         document.getElementById('amort-months').textContent =
             inv.months_elapsed + ' mesos de dades';
 
+        // LCOE — cost real del kWh solar
+        var l = data.lcoe;
+        if (l) {
+            function fmtc(v) {
+                return v.toLocaleString('ca', { minimumFractionDigits: 4, maximumFractionDigits: 4 });
+            }
+            document.getElementById('lcoe-lifetime').innerHTML =
+                fmtc(l.lcoe_lifetime) + ' <span class="unit">€/kWh</span>';
+            document.getElementById('lcoe-basis').textContent = l.based_on_real
+                ? 'producció real (' + Math.round(l.annual_kwh_proj).toLocaleString('ca') + ' kWh/any)'
+                : 'estim. disseny (poques dades encara)';
+            document.getElementById('lcoe-todate').innerHTML =
+                fmtc(l.cost_per_kwh_todate) + ' <span class="unit">€/kWh</span>';
+            document.getElementById('lcoe-spec').innerHTML =
+                fmtc(l.lcoe_spec) + ' <span class="unit">€/kWh</span>';
+            document.getElementById('lcoe-kwp').textContent =
+                l.system_kwp + ' kWp × ' + Math.round(l.annual_kwh_spec / l.system_kwp) + ' kWh/kWp';
+        }
+
         // vs Iberdrola
         document.getElementById('amort-savings-iber').innerHTML = fmt(data.total_savings_iber) + ' <span class="unit">\u20ac</span>';
         document.getElementById('amort-pct-iber').innerHTML = data.payback_pct_iber.toFixed(1) + ' <span class="unit">%</span>';

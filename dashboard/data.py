@@ -762,8 +762,13 @@ _SOLAR_KWP = 65.0   # PIKO 15 (15 kWp) + PIKO CI 50 (50 kWp)
 _SOLAR_TILT = 30
 _SOLAR_AZIMUTH = 0   # 0 = south in Open-Meteo convention
 
-_forecast_cache = {"data": None, "fetched": None}
+_forecast_cache = {"data": None, "fetched": None, "failed_at": None}
 _FORECAST_CACHE_TTL = timedelta(hours=1)
+# Back-off after a failed fetch (e.g. Open-Meteo 429 / offline). Without this the
+# dashboard's 30 s cache would re-trigger a fetch on every refresh, turning one
+# transient failure into a 30 s retry storm that burns the whole daily API quota
+# and keeps the forecast empty for the rest of the day. Retry at most this often.
+_FORECAST_FAIL_BACKOFF = timedelta(minutes=15)
 
 _log = logging.getLogger(__name__)
 
@@ -938,7 +943,20 @@ def _online_solar_kwp(threshold_w=100.0):
     (e.g. a fresh start with no daytime data yet) so the forecast is never
     flattened to zero.
     """
-    online_w = 0.0
+    online_w = sum(_INVERTER_RATED_W[t] for t in _online_inverter_tags(threshold_w))
+    return online_w / 1000.0 if online_w > 0 else _SOLAR_KWP
+
+
+def _online_inverter_tags(threshold_w=100.0):
+    """Set of inverter tags that produced > ``threshold_w`` peak in the last 24h.
+
+    Shared by the single-plane scaling (_online_solar_kwp) and the multi-array
+    v2 forecast, which drops an entire array (with its own geometry) when its
+    inverter is silently offline rather than merely down-scaling one blended
+    curve. A 24h window with max() (not a -5m snapshot) avoids mistaking a
+    healthy inverter for offline at night when it legitimately reads 0.
+    """
+    tags = set()
     for table in _q(f'''
         from(bucket: "{INFLUXDB_BUCKET}")
           |> range(start: -24h)
@@ -950,8 +968,8 @@ def _online_solar_kwp(threshold_w=100.0):
             tag = rec.values.get("inverter")
             peak = rec.get_value() or 0.0
             if tag in _INVERTER_RATED_W and peak > threshold_w:
-                online_w += _INVERTER_RATED_W[tag]
-    return online_w / 1000.0 if online_w > 0 else _SOLAR_KWP
+                tags.add(tag)
+    return tags
 
 
 # Effective GTI→AC efficiency parameters. The plant doesn't reach the rated
@@ -969,16 +987,188 @@ _LOW_LIGHT_KNEE = 500.0   # W/m² above which the rated efficiency holds
 _LOW_LIGHT_EXP = 0.40     # shape of the sub-knee derating (smaller → steeper rise)
 
 
-def _conversion_efficiency(irr_w_m2):
+def _conversion_efficiency(irr_w_m2, rated=_RATED_EFFICIENCY,
+                           knee=_LOW_LIGHT_KNEE, exp=_LOW_LIGHT_EXP):
     """Effective GTI→AC plant efficiency at a given irradiance.
 
     Replaces the old constant 0.80 to correct early-morning/late-evening
-    over-prediction. Saturates to _RATED_EFFICIENCY above _LOW_LIGHT_KNEE,
-    so clear-noon forecasts are unchanged.
+    over-prediction. Saturates to `rated` above `knee`, so clear-noon
+    forecasts are unchanged. The rated/knee/exp params default to the
+    module constants (legacy behaviour) but the v2 model passes the values
+    from the pricing.json `solar_forecast` block so the knee can be re-tuned
+    without a code change.
     """
     if irr_w_m2 <= 0:
         return 0.0
-    return _RATED_EFFICIENCY * min(1.0, irr_w_m2 / _LOW_LIGHT_KNEE) ** _LOW_LIGHT_EXP
+    return rated * min(1.0, irr_w_m2 / knee) ** exp
+
+
+# -- v2 forecast: geometry + cell-temperature model ------------------------
+# The original model was a symmetric due-south curve (azimuth=0, tilt=30) with
+# no temperature term. A pvlib fit (2026-07-03, dashboard/tools/fit_solar_geometry.py)
+# against clean CI-50 clear days Feb-Jun showed the array actually faces ~12°
+# EAST of south at ~35° tilt, and that real production fades faster through the
+# afternoon than irradiance alone predicts (cell heating). Correcting both moves
+# the forecast peak from ~13:45 back to the real ~13:15-13:30 and the PM/AM
+# energy ratio from ~1.10 down to the real ~0.90. All parameters live in the
+# pricing.json `solar_forecast` block so they can be re-tuned without a rebuild.
+
+# Legacy geometry — the exact values the original due-south model requested.
+# Kept as constants so model:"legacy" reproduces the old output byte-for-byte,
+# independent of whatever geometry the config now holds for v2.
+_LEGACY_TILT = _SOLAR_TILT
+_LEGACY_AZIMUTH = _SOLAR_AZIMUTH
+
+_SOLAR_CONFIG_DEFAULTS = {
+    "model": "legacy",
+    "lat": _SOLAR_LAT,
+    "lon": _SOLAR_LON,
+    "kwp_nameplate": _SOLAR_KWP,
+    "tilt_deg": _SOLAR_TILT,
+    "azimuth_deg": _SOLAR_AZIMUTH,
+    "temp_coeff_per_c": -0.0035,
+    "noct_c": 45,
+    "rated_efficiency": _RATED_EFFICIENCY,
+    "low_light_knee_w": _LOW_LIGHT_KNEE,
+    "low_light_exp": _LOW_LIGHT_EXP,
+    # v2 multi-array: list of {name, inverter, tilt_deg, azimuth_deg, kwp}.
+    # When present, the forecast sums an independently-oriented plane per array
+    # instead of one blended plant curve (the plant's two arrays face different
+    # ways: CI-50 ~12°E, PIKO-15 ~15°W). None → single-plane behaviour.
+    "arrays": None,
+}
+
+
+def _load_solar_config():
+    """Return the `solar_forecast` config merged over the module defaults.
+
+    Reads the bind-mounted pricing.json (cached via _load_pricing), so
+    geometry/tempco/knee can be re-tuned live — a fit writes new values, the
+    caller calls invalidate_pricing_caches(), and the next forecast picks them
+    up with no image rebuild. A missing block or missing keys fall back to the
+    defaults so the forecast never breaks on a partial config.
+    """
+    cfg = dict(_SOLAR_CONFIG_DEFAULTS)
+    try:
+        block = _load_pricing().get("solar_forecast") or {}
+    except Exception as e:
+        _log.warning("solar_forecast config load failed (%s); using defaults", e)
+        block = {}
+    for k in cfg:
+        if block.get(k) is not None:
+            cfg[k] = block[k]
+    return cfg
+
+
+def _cell_temp_derate(irr_w_m2, t_air_c, noct_c, temp_coeff_per_c):
+    """Multiplicative power factor for cell-temperature losses (NOCT model).
+
+    T_cell = T_air + (NOCT-20)/800 * GTI ; f = 1 + tempco*(T_cell - 25).
+    Returns 1.0 (no derating) when air temperature is unavailable, so the v2
+    forecast degrades to geometry-only rather than crashing if Open-Meteo
+    omits temperature for a sample. Clamped to (0, 1] — cool cells below 25°C
+    would nominally boost output, but we don't credit that in a production
+    forecast (avoids over-prediction on cold clear mornings).
+    """
+    if t_air_c is None or irr_w_m2 <= 0:
+        return 1.0
+    t_cell = t_air_c + (noct_c - 20.0) / 800.0 * irr_w_m2
+    f = 1.0 + temp_coeff_per_c * (t_cell - 25.0)
+    return max(0.0, min(1.0, f))
+
+
+def _resolve_forecast_planes(cfg, is_v2):
+    """Return the list of oriented planes the forecast should sum.
+
+    Each plane is a dict {name, tilt, azimuth, kwp}. When the v2 config carries
+    an `arrays` list, one plane per physical array is returned — each with its
+    own fitted geometry and calibrated kWp — and any array whose inverter has
+    produced nothing in the last 24h is dropped (so an offline inverter removes
+    exactly its share, not a blended fraction of a single curve). Otherwise a
+    single plant plane is returned, scaled to the online nameplate kWp, which
+    reproduces the previous legacy / single-orientation v2 behaviour.
+    """
+    arrays = cfg.get("arrays")
+    if is_v2 and arrays:
+        online = _online_inverter_tags()
+        planes = []
+        for a in arrays:
+            tag = a.get("inverter")
+            if tag is not None and tag not in online:
+                _log.warning("Solar forecast: array '%s' (%s) offline — excluded",
+                             a.get("name", "?"), tag)
+                continue
+            planes.append({
+                "name": a.get("name", tag or "array"),
+                "tilt": a.get("tilt_deg", cfg["tilt_deg"]),
+                "azimuth": a.get("azimuth_deg", cfg["azimuth_deg"]),
+                "kwp": a.get("kwp", 0.0),
+            })
+        return planes
+
+    # Single-plane fallback. v2 uses the fitted plant geometry; legacy uses the
+    # original due-south constants so it reproduces the old curve exactly.
+    tilt = cfg["tilt_deg"] if is_v2 else _LEGACY_TILT
+    azimuth = cfg["azimuth_deg"] if is_v2 else _LEGACY_AZIMUTH
+    online_kwp = _online_solar_kwp()
+    if online_kwp < _SOLAR_KWP:
+        # warning (not info) so it surfaces under the default WARNING root level —
+        # only fires when an inverter is actually offline, so it is not noise.
+        _log.warning("Solar forecast scaled to %.0f kWp of %.0f (inverter(s) offline)",
+                     online_kwp, _SOLAR_KWP)
+    return [{"name": "plant", "tilt": tilt, "azimuth": azimuth, "kwp": online_kwp}]
+
+
+def _fetch_plane_power(cfg, is_v2, plane):
+    """Fetch one plane's Open-Meteo GTI and return (times, {t_str: power_w}).
+
+    P = GTI * kWp * eff(GTI) [* temp_derate in v2]. Efficiency is irradiance-
+    dependent (see _conversion_efficiency): rated above the low-light knee,
+    derated below to capture inverter part-load + AOI + morning shading. v2
+    additionally applies cell-temperature losses (afternoon fade). Only samples
+    with positive irradiance are returned. Raises on a fetch/HTTP error so the
+    caller can skip just this plane.
+    """
+    minutely = ("global_tilted_irradiance,temperature_2m,wind_speed_10m"
+                if is_v2 else "global_tilted_irradiance")
+    resp = requests.get(
+        "https://api.open-meteo.com/v1/forecast",
+        params={
+            "latitude": cfg["lat"],
+            "longitude": cfg["lon"],
+            "minutely_15": minutely,
+            "tilt": plane["tilt"],
+            # Open-Meteo azimuth convention: 0=south, negative=east, positive=west.
+            "azimuth": plane["azimuth"],
+            "timezone": "Europe/Madrid",
+            "forecast_days": 3,
+        },
+        timeout=10,
+    )
+    resp.raise_for_status()
+    m15 = resp.json().get("minutely_15", {})
+    times = m15.get("time", [])
+    gti = m15.get("global_tilted_irradiance", [])
+    temps = m15.get("temperature_2m", []) if is_v2 else []
+
+    rated = cfg["rated_efficiency"]
+    knee = cfg["low_light_knee_w"]
+    exp = cfg["low_light_exp"]
+    noct = cfg["noct_c"]
+    tempco = cfg["temp_coeff_per_c"]
+    kwp = plane["kwp"]
+
+    power = {}
+    for i, (t_str, irr) in enumerate(zip(times, gti)):
+        if irr is None or irr <= 0:
+            continue
+        eff = _conversion_efficiency(irr, rated=rated, knee=knee, exp=exp)
+        if is_v2:
+            # Cell-temperature derating; falls back to 1.0 if temp is missing.
+            t_air = temps[i] if i < len(temps) else None
+            eff *= _cell_temp_derate(irr, t_air, noct, tempco)
+        power[t_str] = irr * kwp * eff
+    return times, power
 
 
 def get_solar_forecast():
@@ -1000,43 +1190,45 @@ def get_solar_forecast():
             and now - _forecast_cache["fetched"] < _FORECAST_CACHE_TTL):
         return _forecast_cache["data"]
 
-    try:
-        resp = requests.get(
-            "https://api.open-meteo.com/v1/forecast",
-            params={
-                "latitude": _SOLAR_LAT,
-                "longitude": _SOLAR_LON,
-                "minutely_15": "global_tilted_irradiance",
-                "tilt": _SOLAR_TILT,
-                "azimuth": _SOLAR_AZIMUTH,
-                "timezone": "Europe/Madrid",
-                "forecast_days": 3,
-            },
-            timeout=10,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-    except Exception as e:
-        _log.error("Solar forecast fetch failed: %s", e)
+    # Back off after a recent failure so we don't hammer Open-Meteo (and burn the
+    # daily quota) on every 30 s dashboard refresh while it's rate-limiting us.
+    if (_forecast_cache["failed_at"]
+            and now - _forecast_cache["failed_at"] < _FORECAST_FAIL_BACKOFF):
         return _forecast_cache["data"] or _empty_forecast()
 
-    m15 = data.get("minutely_15", {})
-    times = m15.get("time", [])
-    gti = m15.get("global_tilted_irradiance", [])
+    cfg = _load_solar_config()
+    is_v2 = cfg["model"] == "v2"
 
-    # Convert GTI (W/m²) to expected plant power (W).
-    # P = GTI * kWp * eff(GTI) — efficiency is irradiance-dependent (see
-    # _conversion_efficiency): rated 0.80 above 500 W/m², derated below to
-    # capture inverter part-load curve + AOI + morning horizon shading.
+    # Resolve the plane(s) to sum. A v2 config with an `arrays` block models each
+    # physical array on its own orientation (the plant's two arrays face opposite
+    # ways — see _resolve_forecast_planes); otherwise one blended plant plane is
+    # used (legacy due-south, or single-orientation v2).
+    planes = _resolve_forecast_planes(cfg, is_v2)
+    if not planes:
+        _log.warning("Solar forecast: no online arrays; returning empty forecast")
+        _forecast_cache["failed_at"] = now
+        return _forecast_cache["data"] or _empty_forecast()
 
-    # Scale to inverters that are actually producing, not full nameplate —
-    # otherwise an offline inverter makes the forecast look permanently missed.
-    online_kwp = _online_solar_kwp()
-    if online_kwp < _SOLAR_KWP:
-        # warning (not info) so it surfaces under the default WARNING root level —
-        # only fires when an inverter is actually offline, so it is not noise.
-        _log.warning("Solar forecast scaled to %.0f kWp of %.0f (inverter(s) offline)",
-                     online_kwp, _SOLAR_KWP)
+    # Fetch + GTI→power per plane, then sum by timestamp. Every plane queries the
+    # same endpoint/timezone/horizon so their 15-min time grids align exactly.
+    merged = {}          # t_str -> summed power_w
+    master_times = None  # chronological order from the first successful plane
+    any_ok = False
+    for pl in planes:
+        try:
+            times, power = _fetch_plane_power(cfg, is_v2, pl)
+        except Exception as e:
+            _log.error("Solar forecast fetch failed for plane '%s': %s",
+                       pl["name"], e)
+            continue
+        any_ok = True
+        if master_times is None:
+            master_times = times
+        for t_str, w in power.items():
+            merged[t_str] = merged.get(t_str, 0.0) + w
+    if not any_ok:
+        _forecast_cache["failed_at"] = now
+        return _forecast_cache["data"] or _empty_forecast()
 
     today_str = now.strftime("%Y-%m-%d")
     tomorrow_str = (now + timedelta(days=1)).strftime("%Y-%m-%d")
@@ -1049,14 +1241,11 @@ def get_solar_forecast():
     energy_tomorrow = 0.0
     energy_day3 = 0.0
 
-    for t_str, irr in zip(times, gti):
-        if irr is None or irr <= 0:
-            continue
-        # Power in watts: P = GTI/STC * kWp * eff(GTI) * 1000
-        power_w = round(irr * online_kwp * _conversion_efficiency(irr), 0)
-        # Convert to ISO with timezone for Chart.js
-        dt = datetime.fromisoformat(t_str)
-        iso = dt.isoformat()
+    for t_str in master_times:
+        if t_str not in merged:
+            continue  # night / zero-irradiance samples aren't emitted
+        power_w = round(merged[t_str], 0)
+        iso = datetime.fromisoformat(t_str).isoformat()
         point = {"x": iso, "y": power_w}
 
         if t_str.startswith(today_str):
@@ -1080,6 +1269,7 @@ def get_solar_forecast():
 
     _forecast_cache["data"] = result
     _forecast_cache["fetched"] = now
+    _forecast_cache["failed_at"] = None
     return result
 
 
@@ -2564,6 +2754,76 @@ def get_negative_prices():
     }
 
 
+def _compute_lcoe(total_gen, days_elapsed, pricing):
+    """Levelized cost of the solar kWh: the €-capex spread over lifetime production.
+
+    The marginal "fuel" of a solar kWh is ~0, but its real cost is the capital
+    amortized over every kWh the plant makes. Two views returned:
+      - lcoe_lifetime: inv / projected lifetime kWh → stable ~0.02-0.03 €/kWh figure
+        to actually price solar consumption (e.g. the EV charger).
+      - cost_per_kwh_todate: inv / kWh produced so far → descends month to month
+        toward the true LCOE as production accumulates.
+
+    total_gen: cumulative real generation since install (kWh)
+    days_elapsed: days since install (to annualize the real production rate)
+    """
+    inv = pricing.get("investment", {})
+    inv_cost = inv.get("installation_cost_eur", 50000)
+    lifetime_years = inv.get("expected_lifetime_years", 25)
+    system_kwp = inv.get("system_kwp", 62)
+    spec_yield = inv.get("spec_yield_kwh_per_kwp", 1500)
+    degr_pct_yr = inv.get("panel_degradation_pct_year", 0.5) / 100.0
+    # Average lifetime output vs nameplate under linear degradation (year 0 = 100%)
+    degr_factor = max(0.0, 1.0 - degr_pct_yr * (lifetime_years - 1) / 2.0)
+
+    days_elapsed = max(days_elapsed, 1)
+    annual_kwh_spec = system_kwp * spec_yield
+    # Annualize measured production (biased by season/outages early on — flagged in UI)
+    annual_kwh_real = total_gen / days_elapsed * 365.25
+    # Use measured rate only once there's enough data to be meaningful; else spec design
+    use_real = days_elapsed >= 60 and annual_kwh_real > 0
+    annual_kwh_proj = annual_kwh_real if use_real else annual_kwh_spec
+
+    lifetime_kwh_proj = annual_kwh_proj * lifetime_years * degr_factor
+    lcoe_lifetime = (inv_cost / lifetime_kwh_proj) if lifetime_kwh_proj > 0 else 0.0
+    lcoe_spec = (inv_cost / (annual_kwh_spec * lifetime_years * degr_factor)) if annual_kwh_spec > 0 else 0.0
+    cost_per_kwh_todate = (inv_cost / total_gen) if total_gen > 0 else 0.0
+
+    return {
+        "lcoe_lifetime": round(lcoe_lifetime, 4),        # headline €/kWh for pricing
+        "lcoe_spec": round(lcoe_spec, 4),                # design reference (spec yield)
+        "cost_per_kwh_todate": round(cost_per_kwh_todate, 4),  # descends toward LCOE
+        "annual_kwh_proj": round(annual_kwh_proj, 0),
+        "annual_kwh_real": round(annual_kwh_real, 0),
+        "annual_kwh_spec": round(annual_kwh_spec, 0),
+        "based_on_real": use_real,
+        "days_elapsed": days_elapsed,
+        "system_kwp": system_kwp,
+        "degr_factor": round(degr_factor, 3),
+    }
+
+
+def _total_generation_kwh_since(range_start_iso):
+    """Sum plant generation (kWh) since range_start_iso from hourly mean power.
+
+    Each hourly record = mean W over the hour × 1h / 1000 = kWh; summed across
+    both inverters. Used for LCOE denominators outside get_amortitzacio_data."""
+    bucket = INFLUXDB_BUCKET
+    gen_hours = _hourly_records(f'''
+        from(bucket: "{bucket}")
+          |> range(start: {range_start_iso})
+          |> filter(fn: (r) => r._measurement == "piko")
+          |> filter(fn: (r) => exists r.inverter)
+          |> filter(fn: (r) => r._field == "ac_power_total")
+          |> aggregateWindow(every: 1h, fn: mean, createEmpty: false)
+          |> group(columns: ["_time"])
+          |> sum()
+          |> group()
+          |> map(fn: (r) => ({{r with _value: r._value / 1000.0}}))
+    ''')
+    return sum(v for _, v in gen_hours)
+
+
 def get_amortitzacio_data():
     """Compute cumulative savings and payback progress since installation."""
     pricing = _load_pricing()
@@ -2793,6 +3053,9 @@ def get_amortitzacio_data():
     roi_idx = ((total_savings_idx / inv_cost) * 100) if inv_cost > 0 else 0
     roi_iber = ((total_savings_iber / inv_cost) * 100) if inv_cost > 0 else 0
 
+    # --- LCOE: real cost of the solar kWh (capex amortized over production) ---
+    lcoe = _compute_lcoe(total_gen, (now - inv_date).days, pricing)
+
     chart_monthly_idx = [{"x": m["month"], "y": m["savings_idx"]} for m in monthly_savings]
     chart_monthly_iber = [{"x": m["month"], "y": m["savings_iber"]} for m in monthly_savings]
     chart_monthly_real = [{"x": m["month"], "y": m["savings_real"]} for m in monthly_savings]
@@ -2831,6 +3094,7 @@ def get_amortitzacio_data():
         "daily_avg_savings_real": round(daily_avg_real, 2),
         # Shared
         "total_gen_kwh": round(total_gen, 1),
+        "lcoe": lcoe,
         "chart_monthly_idx": chart_monthly_idx,
         "chart_monthly_iber": chart_monthly_iber,
         "chart_monthly_real": chart_monthly_real,
@@ -3944,6 +4208,15 @@ def get_ev_solar_data():
     bucket = INFLUXDB_BUCKET
     month_start = _month_start_iso()
 
+    # Real cost of the solar kWh (LCOE) — the honest price for solar charged into
+    # the car: capex amortized over lifetime production, not the ~0 marginal fuel.
+    inv = pricing.get("investment", {})
+    _inv_date = datetime.strptime(
+        inv.get("installation_date", "2026-02-01"), "%Y-%m-%d").replace(tzinfo=_CET)
+    _total_gen_life = _total_generation_kwh_since(_inv_date.isoformat())
+    lcoe = _compute_lcoe(_total_gen_life, (now - _inv_date).days, pricing)
+    lcoe_rate = lcoe["lcoe_lifetime"]
+
     # Determine current season
     if cur_month in heating_months:
         season = "heating"
@@ -4217,6 +4490,13 @@ def get_ev_solar_data():
         rec = ("L'excedent solar \u00e9s insuficient per generar benefici net. "
                "Considera optimitzar l'horari de c\u00e0rrega a les hores de m\u00e0xim sol.")
 
+    # Cost of the solar energy charged into the car, priced at LCOE
+    month_charge_cost_lcoe = month_charged * lcoe_rate
+    annual_charged = daily_avg_charged * 365
+    annual_charge_cost_lcoe = annual_charged * lcoe_rate
+    # What that same energy would cost bought from the grid (home_rate reference)
+    annual_charge_cost_grid = annual_charged * home_rate
+
     return {
         "enabled": True,
         "model": ev.get("model", "EV"),
@@ -4243,6 +4523,7 @@ def get_ev_solar_data():
             "home_savings_eur": round(month_savings, 2),
             "lost_compensation_eur": round(month_lost, 2),
             "net_benefit_eur": round(month_net, 2),
+            "charge_cost_lcoe_eur": round(month_charge_cost_lcoe, 2),
             "days": days_count,
         },
         "projection": {
@@ -4252,7 +4533,12 @@ def get_ev_solar_data():
             "home_coverage_pct": home_coverage_pct,
             "avg_thermal_kwh_day": round(daily_avg_thermal, 1),
             "hvac_hours_night": round(hvac_hours_night, 1),
+            "annual_charge_kwh": round(annual_charged, 0),
+            "annual_charge_cost_lcoe_eur": round(annual_charge_cost_lcoe, 2),
+            "annual_charge_cost_grid_eur": round(annual_charge_cost_grid, 2),
         },
+        "lcoe": lcoe,
+        "home_rate_eur_kwh": home_rate,
         "daily_chart": daily_chart,
         "recommendation": rec,
     }

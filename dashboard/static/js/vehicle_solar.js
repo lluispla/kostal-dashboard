@@ -121,6 +121,32 @@
         document.getElementById('ev-month-lost').innerHTML =
             fmt(m.lost_compensation_eur) + ' <span class="unit">\u20ac</span>';
 
+        // LCOE \u2014 cost real del kWh solar carregat
+        var l = data.lcoe;
+        if (l) {
+            var fmt4 = function (v) {
+                return v.toLocaleString('ca', { minimumFractionDigits: 4, maximumFractionDigits: 4 });
+            };
+            document.getElementById('ev-lcoe-rate').innerHTML =
+                fmt4(l.lcoe_lifetime) + ' <span class="unit">\u20ac/kWh</span>';
+            document.getElementById('ev-lcoe-basis').textContent = l.based_on_real
+                ? 'producci\u00f3 real (' + Math.round(l.annual_kwh_proj).toLocaleString('ca') + ' kWh/any)'
+                : 'estim. disseny (poques dades encara)';
+            document.getElementById('ev-lcoe-month-cost').innerHTML =
+                fmt(m.charge_cost_lcoe_eur) + ' <span class="unit">\u20ac</span>';
+            document.getElementById('ev-lcoe-month-kwh').textContent =
+                fmt(m.solar_charge_kwh) + ' kWh carregats';
+            document.getElementById('ev-lcoe-annual-cost').innerHTML =
+                fmt(data.projection.annual_charge_cost_lcoe_eur) + ' <span class="unit">\u20ac/any</span>';
+            document.getElementById('ev-lcoe-annual-kwh').textContent =
+                Math.round(data.projection.annual_charge_kwh).toLocaleString('ca') + ' kWh/any projectats';
+            var vsGrid = (data.projection.annual_charge_cost_grid_eur || 0) - (data.projection.annual_charge_cost_lcoe_eur || 0);
+            document.getElementById('ev-lcoe-vs-grid').innerHTML =
+                fmt(vsGrid) + ' <span class="unit">\u20ac/any</span>';
+            document.getElementById('ev-lcoe-vs-grid-note').textContent =
+                'vs comprar a ' + fmt4(data.home_rate_eur_kwh || 0.17) + ' \u20ac/kWh';
+        }
+
         // Projection KPIs
         var p = data.projection;
         document.getElementById('ev-annual-savings').innerHTML =

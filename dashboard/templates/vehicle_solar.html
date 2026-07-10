@@ -158,6 +158,49 @@
 
 <div class="martini-stripe-thin" style="margin-bottom: 1.5rem;"></div>
 
+<!-- Row 3b: Cost real del kWh solar carregat (LCOE) -->
+<div class="section">
+    <div class="section-header">
+        <span class="icon">&#9728;</span>
+        <h2>Cost Real de la C&agrave;rrega Solar (LCOE)</h2>
+    </div>
+    <div class="kpi-row">
+        <div class="kpi-card" style="border: 2px solid var(--green);">
+            <div class="label">Cost del kWh solar</div>
+            <div class="value val-green" id="ev-lcoe-rate">--</div>
+            <div class="kpi-pct val-muted" id="ev-lcoe-basis">--</div>
+        </div>
+        <div class="kpi-card">
+            <div class="label">Cost c&agrave;rrega (mes, a LCOE)</div>
+            <div class="value val-navy" id="ev-lcoe-month-cost">--</div>
+            <div class="kpi-pct val-muted" id="ev-lcoe-month-kwh">--</div>
+        </div>
+        <div class="kpi-card">
+            <div class="label">Cost c&agrave;rrega (any, a LCOE)</div>
+            <div class="value val-navy" id="ev-lcoe-annual-cost">--</div>
+            <div class="kpi-pct val-muted" id="ev-lcoe-annual-kwh">--</div>
+        </div>
+        <div class="kpi-card" style="background: var(--light-grey);">
+            <div class="label">Estalvi vs xarxa (any)</div>
+            <div class="value val-green" id="ev-lcoe-vs-grid">--</div>
+            <div class="kpi-pct val-muted" id="ev-lcoe-vs-grid-note">--</div>
+        </div>
+    </div>
+    <div class="kpi-row" style="margin-top: 0.75rem;">
+        <div class="kpi-card" style="grid-column: span 4; background: var(--light-grey);">
+            <p style="font-size: 0.82rem; color: var(--muted); line-height: 1.5; text-align: left; margin: 0;">
+                El combustible marginal del kWh solar &eacute;s ~0&nbsp;&euro; (excedent que altrament es
+                perdria per <em>curtailment</em>), per&ograve; el cost real &eacute;s el <strong style="color: var(--green);">LCOE</strong>:
+                els 50.000&nbsp;&euro; de la instal&middot;laci&oacute; repartits sobre tota la producci&oacute; de la seva vida.
+                <strong>Aquest &eacute;s el preu a posar al carregador Autel.</strong>
+                Es sincronitza amb el mateix c&agrave;lcul de /amortitzaci&oacute;.
+            </p>
+        </div>
+    </div>
+</div>
+
+<div class="martini-stripe-thin" style="margin-bottom: 1.5rem;"></div>
+
 <!-- Row 4: Daily chart (stacked) -->
 <div class="section">
     <div class="section-header">
