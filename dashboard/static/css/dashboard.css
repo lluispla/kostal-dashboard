@@ -1727,3 +1727,15 @@ body.kiosk .chart-wrap h3 {
     border-radius: 4px;
     font-size: 0.9rem;
 }
+
+/* Banner for an inverter that has stopped reporting. Amber, not red: the plant
+   is usually fine and still producing — it is the data that is missing. */
+.offline-warning {
+    margin-bottom: 1rem;
+    padding: 0.7rem 1rem;
+    background: #fff3cd;
+    color: #856404;
+    border-left: 4px solid #e0a800;
+    border-radius: 4px;
+    font-size: 0.9rem;
+}

@@ -5,6 +5,19 @@
         <h2>Planta Solar — Ara</h2>
     </div>
 
+    <!-- Shown whenever an inverter stops reporting: its production is invisible
+         to the meter maths, so consumption and every PV-derived figure below
+         are understated or unmeasurable until the link is back. -->
+    <div id="offline-warning" class="offline-warning"
+         {% if not d.energia.offline_inverters %}style="display:none;"{% endif %}>
+        &#9888; <strong>Dades incompletes:</strong>
+        <span id="offline-warning-text">
+            {{ d.energia.offline_inverters|join(', ') }} no comunica.
+            La seva producció no es pot mesurar, així que el consum surt com a
+            n/d i la generació i els percentatges d'avui queden per sota del real.
+        </span>
+    </div>
+
     <!-- Top 5 KPI cards -->
     <div class="kpi-row kpi-row-hero">
         <div class="kpi-card">
@@ -19,7 +32,7 @@
             <div class="label">Consum Addwerk ara</div>
             <div class="description">Potència consumida al local (autoconsum + xarxa)</div>
             <div class="value val-navy">
-                <span data-field="energia.consumption_w" data-fmt="0">{{ "%.0f"|format(d.energia.consumption_w) }}</span>
+                <span data-field="energia.consumption_w" data-fmt="0" data-nd>{{ d.energia.consumption_w|nd("%.0f") }}</span>
                 <span class="unit">W</span>
             </div>
         </div>
@@ -45,7 +58,7 @@
             <div class="label">Taxa autoconsum avui</div>
             <div class="description">Percentatge d'energia solar consumida localment</div>
             <div class="value val-blue">
-                <span data-field="energia.self_consumption_rate" data-fmt="1">{{ "%.1f"|format(d.energia.self_consumption_rate) }}</span>
+                <span data-field="energia.self_consumption_rate" data-fmt="1" data-nd>{{ d.energia.self_consumption_rate|nd("%.1f") }}</span>
                 <span class="unit">%</span>
             </div>
         </div>

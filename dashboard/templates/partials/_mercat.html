@@ -104,11 +104,13 @@
     <div style="margin-bottom: 0.75rem;">
         {% if d.mercat.day_flag == "cheap" %}
         <span class="status-badge status-ok" data-field-badge="mercat.day_flag">
-            Dia barat &mdash; OMIE mitja {{ "%.1f"|format(d.mercat.omie_avg_today) }} &euro;/MWh
+            Dia barat &mdash; OMIE mitja dia sencer <span data-field="mercat.omie_avg_today_full" data-fmt="1">{{ "%.1f"|format(d.mercat.omie_avg_today_full) }}</span> &euro;/MWh
+            (fins ara <span data-field="mercat.omie_avg_today" data-fmt="1">{{ "%.1f"|format(d.mercat.omie_avg_today) }}</span>)
         </span>
         {% else %}
         <span class="status-badge status-error" data-field-badge="mercat.day_flag">
-            Dia car &mdash; OMIE mitja {{ "%.1f"|format(d.mercat.omie_avg_today) }} &euro;/MWh
+            Dia car &mdash; OMIE mitja dia sencer <span data-field="mercat.omie_avg_today_full" data-fmt="1">{{ "%.1f"|format(d.mercat.omie_avg_today_full) }}</span> &euro;/MWh
+            (fins ara <span data-field="mercat.omie_avg_today" data-fmt="1">{{ "%.1f"|format(d.mercat.omie_avg_today) }}</span>)
         </span>
         {% endif %}
     </div>
@@ -116,7 +118,7 @@
 
     <!-- OMIE hourly chart -->
     <div class="chart-wrap dash-chart-wrap" id="dash-wrap-omie">
-        <h3>Preu OMIE horari &mdash; avui (barres = spot, linia vermella = indexat real, linia discontínua = tarifa fixa)</h3>
+        <h3>Preu OMIE horari &mdash; avui, corba day-ahead completa 24h (barres = spot, linia vermella = indexat real, linia discontínua = tarifa fixa, linia "ara" = hora actual)</h3>
         <button class="chart-btn fullscreen-btn" onclick="toggleDashFullscreen('dash-wrap-omie')">&#x26F6;</button>
         <div style="height: 250px;">
             <canvas id="chart-omie"></canvas>

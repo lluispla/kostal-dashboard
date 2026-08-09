@@ -32,9 +32,14 @@ function _ema(series, period) {
     if (!series || series.length === 0) return [];
     var alpha = 2 / (period + 1);
     var out = [];
-    var prev = series[0].y;
+    var prev = null;
     for (var i = 0; i < series.length; i++) {
-        prev = alpha * series[i].y + (1 - alpha) * prev;
+        var y = series[i].y;
+        // A null is "not measured", not zero. Feeding it through the average
+        // would drag the line toward 0 and then draw a confident smooth curve
+        // across data nobody has.
+        if (y == null) { out.push({ x: series[i].x, y: null }); continue; }
+        prev = (prev === null) ? y : alpha * y + (1 - alpha) * prev;
         out.push({ x: series[i].x, y: Math.round(prev * 100) / 100 });
     }
     return out;
@@ -348,6 +353,35 @@ function updateYield30d(data) {
     chartYield.update('none');
 }
 
+/* Vertical "now" marker for the OMIE day-ahead chart: everything to the right
+   is a known but not-yet-elapsed price (tonight's peak). */
+var omieNowLinePlugin = {
+    id: 'omieNowLine',
+    afterDraw: function (chart) {
+        var xScale = chart.scales.x;
+        if (!xScale) return;
+        var now = Date.now();
+        if (now < xScale.min || now > xScale.max) return;
+        var x = xScale.getPixelForValue(now);
+        var area = chart.chartArea;
+        var ctx = chart.ctx;
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(x, area.top);
+        ctx.lineTo(x, area.bottom);
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([4, 3]);
+        ctx.strokeStyle = 'rgba(108, 117, 125, 0.8)';
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = 'rgba(108, 117, 125, 0.95)';
+        ctx.font = '10px sans-serif';
+        ctx.textAlign = x > (area.left + area.right) / 2 ? 'right' : 'left';
+        ctx.fillText(' ara ', x + (ctx.textAlign === 'right' ? -2 : 2), area.top + 10);
+        ctx.restore();
+    }
+};
+
 /* -- 3. OMIE Hourly (bar + indexed line + fixed-rate line) --------------- */
 function initOmieHourly(mercat) {
     const ctx = document.getElementById('chart-omie');
@@ -375,6 +409,7 @@ function initOmieHourly(mercat) {
     chartOmie = new Chart(ctx, {
         type: 'bar',
         data: { labels: data.map(d => d.x), datasets: datasets },
+        plugins: [omieNowLinePlugin],
         options: {
             responsive: true,
             maintainAspectRatio: false,

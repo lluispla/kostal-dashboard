@@ -23,7 +23,7 @@
                 <span class="unit">kWh</span>
             </div>
             <div class="kpi-pct val-green">
-                <span data-field="energia.from_pv_pct" data-fmt="1">{{ "%.1f"|format(d.energia.from_pv_pct) }}</span>% del consum
+                <span data-field="energia.from_pv_pct" data-fmt="1" data-nd>{{ d.energia.from_pv_pct|nd("%.1f") }}</span>% del consum
             </div>
         </div>
         <div class="kpi-card">
@@ -34,7 +34,7 @@
                 <span class="unit">kWh</span>
             </div>
             <div class="kpi-pct val-red">
-                <span data-field="energia.from_grid_pct" data-fmt="1">{{ "%.1f"|format(d.energia.from_grid_pct) }}</span>% del consum
+                <span data-field="energia.from_grid_pct" data-fmt="1" data-nd>{{ d.energia.from_grid_pct|nd("%.1f") }}</span>% del consum
             </div>
         </div>
         <div class="kpi-card">

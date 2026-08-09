@@ -32,7 +32,8 @@ from config import (
     INFLUXDB_URL, INFLUXDB_TOKEN, INFLUXDB_ORG, INFLUXDB_BUCKET,
     BACKUP_INFLUXDB_URL,
     PRICING_PATH,
-    PIKO_15_RATED_W, PIKO_CI_50_RATED_W, STATUS_MAP,
+    PIKO_15_RATED_W, PIKO_CI_50_RATED_W,
+    STATUS_MAP, STATUS_CLASS, CI_STATUS_MAP, CI_STATUS_CLASS,
 )
 
 _client = InfluxDBClient(url=INFLUXDB_URL, token=INFLUXDB_TOKEN, org=INFLUXDB_ORG)
@@ -53,15 +54,24 @@ def _cet_now():
 
 
 def _is_holiday(dt):
-    """Check if a date is a national/Catalunya holiday (3.0TD festiu → P6).
+    """Check if a date is a 3.0TD *festiu nacional* (→ P6).
 
-    Includes fixed national holidays and Catalunya-specific holidays.
-    Easter-based movable holidays are computed for each year.
+    IMPORTANT: the 3.0TD period calendar (Circular 3/2020 CNMC) counts ONLY
+    the non-substitutable *national* holidays. Regional/local holidays do NOT
+    shift the tariff period — a Catalunya-only holiday is billed as a normal
+    working day. This was proven against invoice FE2600807696 (June 2026):
+    Sant Joan (24/06, a Wednesday) is billed as a working day — treating it as
+    P6 mis-assigned ~86 kWh from P3/P4 into P6, and forcing it back to a normal
+    weekday made the P3 total match the invoice exactly (1796 = 1796 kWh).
+
+    So this list must stay national-only. Do NOT re-add Sant Joan, the Diada,
+    Sant Esteve or Dilluns de Pasqua here — those are P6 for local labour
+    calendars but NOT for 3.0TD billing.
     """
     m, d = dt.month, dt.day
     y = dt.year
 
-    # Fixed national holidays (Spain)
+    # Fixed national holidays used by the 3.0TD period calendar (Spain).
     fixed = {
         (1, 1),    # Cap d'Any
         (1, 6),    # Reis
@@ -73,11 +83,6 @@ def _is_holiday(dt):
         (12, 8),   # Immaculada Concepció
         (12, 25),  # Nadal
     }
-
-    # Catalunya-specific holidays
-    fixed.add((6, 24))   # Sant Joan
-    fixed.add((9, 11))   # Diada Nacional de Catalunya
-    fixed.add((12, 26))  # Sant Esteve
 
     if (m, d) in fixed:
         return True
@@ -101,14 +106,13 @@ def _is_holiday(dt):
     # Easter Sunday
     easter = datetime(y, month_e, day_e, tzinfo=dt.tzinfo)
 
-    # Movable holidays
-    divendres_sant = easter - timedelta(days=2)   # Divendres Sant
-    dilluns_pasqua = easter + timedelta(days=1)    # Dilluns de Pasqua (Catalunya)
+    # Divendres Sant (Good Friday) is a national holiday → 3.0TD festiu.
+    # Dilluns de Pasqua (Easter Monday) is regional-only → NOT a 3.0TD festiu.
+    divendres_sant = easter - timedelta(days=2)
 
-    easter_date = easter.date() if hasattr(easter, 'date') else easter
     dt_date = dt.date() if hasattr(dt, 'date') else dt
 
-    if dt_date in (divendres_sant.date(), dilluns_pasqua.date()):
+    if dt_date == divendres_sant.date():
         return True
 
     return False
@@ -226,9 +230,31 @@ def _get_injection_price():
     return iber.get("surplus_eur_kwh", 0.05)
 
 
+def _export_is_compensated():
+    """Whether exported surplus is actually paid for (any retailer).
+
+    False when the plant is not legalised for export: a zero-export limiter is
+    active and the distributor registers no compensable surplus, so real invoices
+    carry NO compensation line (verified on FE2600807696). Crediting OMIE-priced
+    KSEM spillover would understate the true bill — see injection._legalised_note.
+    Defaults to True so legalised setups are unaffected.
+    """
+    pricing = _load_pricing()
+    return pricing.get("injection", {}).get("legalised_for_export", True)
+
+
 def _today_start_iso():
     """Midnight CET today as ISO string for Flux range(start:)."""
     t = _cet_now().replace(hour=0, minute=0, second=0, microsecond=0)
+    return t.isoformat()
+
+
+def _tomorrow_start_iso():
+    """Midnight CET tomorrow as ISO string. Used to show the full day-ahead
+    OMIE curve: the auction publishes all 24h at once, so the prices for the
+    not-yet-elapsed evening are already stored; without an explicit stop, Flux
+    defaults to now() and would hide them."""
+    t = (_cet_now() + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
     return t.isoformat()
 
 
@@ -326,6 +352,7 @@ def _compute_economia_indexed(range_start):
     tariff = _load_indexed_tariff()
     iber_rates = _get_energy_rates()
     iber_surplus = _get_injection_price()
+    export_compensated = _export_is_compensated()
 
     cf = tariff.get("contract_formula", {})
     cf_mult = cf.get("adjustment_multiplier", 1.0)
@@ -427,10 +454,12 @@ def _compute_economia_indexed(range_start):
             savings_iber += self_cons_kwh * iber_rates.get(period, 0.154)
             total_self_cons += self_cons_kwh
 
-        # Surplus compensation: raw OMIE price (contract clause 2e)
+        # Surplus compensation: raw OMIE price (contract clause 2e). Only when
+        # the plant is legalised for export — otherwise no retailer pays for it.
         if exp_kwh > 0:
-            surplus_income += exp_kwh * omie_price
-            surplus_iber += exp_kwh * iber_surplus
+            if export_compensated:
+                surplus_income += exp_kwh * omie_price
+                surplus_iber += exp_kwh * iber_surplus
             total_export += exp_kwh
 
         total_gen += gen_kwh
@@ -786,6 +815,31 @@ _INVERTER_STRING_COUNT = {
     "piko_ci_50": 4,
 }
 
+# Influx tag → the name people use for the box on the wall, for user-facing text.
+_INVERTER_LABEL = {
+    "piko_15": "PIKO 15",
+    "piko_ci_50": "PIKO CI 50",
+}
+
+
+def _offline_inverters():
+    """Return the tags of inverters that have sent nothing for 5 minutes.
+
+    An unreachable inverter produces no rows at all, and every _scalar() call
+    reports that as 0.0 — indistinguishable from a genuinely idle one. Whatever
+    depends on plant generation is then *unknown*, not zero, so callers must be
+    able to tell the two apart rather than publishing a confident wrong number.
+    """
+    return [
+        tag for tag in _INVERTER_STRING_COUNT
+        if _scalar(f'''
+            from(bucket: "{INFLUXDB_BUCKET}")
+              |> range(start: -5m)
+              |> filter(fn: (r) => r._measurement == "piko" and r.inverter == "{tag}")
+              |> count()
+        ''') == 0.0
+    ]
+
 
 def _classify_string_state(v, w, peak_24h_v, peak_24h_w):
     """Classify a single DC string's state from a recent snapshot + 24h peaks.
@@ -827,10 +881,16 @@ def _strings_summary(inverters):
     just nighttime/low-light on a healthy string and shouldn't trigger a
     warning. Returns counts, a boolean flag, and a Catalan label ready for
     direct rendering (empty string when everything is fine).
+
+    Inverters marked offline are skipped entirely: with no data arriving, every
+    one of their strings classifies as 'unconnected', which reads as a panel
+    fault when the only thing actually broken is the comms link.
     """
     n_fault = 0
     n_unconn = 0
     for inv in inverters:
+        if inv.get("offline"):
+            continue
         for s in (inv.get("strings") or []):
             if s["state"] == "fault":
                 n_fault += 1
@@ -1403,6 +1463,14 @@ def get_energia():
     # Consumption = generation + grid (derived, not from piko_15)
     consumption_w = plant_power_w + grid_flow_w
 
+    # ...but only if we can see the whole plant. A silent inverter contributes 0
+    # to plant_power_w while its output still shows up in the meter as export,
+    # so the sum goes negative and clamps to a flat, confident "0 W" during a
+    # comms outage. Publish None instead: unknown is not zero.
+    offline = _offline_inverters()
+    if offline:
+        consumption_w = None
+
     # Today's energy for self-consumption rate and consumption breakdown
     gen_today = _generation_kwh(today)
     export_today = _export_kwh(today)
@@ -1420,6 +1488,14 @@ def get_energia():
     else:
         from_pv_pct = 0.0
         from_grid_pct = 0.0
+
+    # These all divide by generation, so a missing inverter drags every one of
+    # them toward "the plant is barely contributing" (3.6% from PV on a sunny
+    # August morning). Withhold them rather than understate the plant.
+    if offline:
+        self_consumption_rate = None
+        from_pv_pct = None
+        from_grid_pct = None
 
     # Power curve — generation and grid from DB, consumption computed
     generation = _records_xy(f'''
@@ -1481,12 +1557,43 @@ def get_energia():
             curtailed_wh += lost_w / 60  # 1-minute window
     curtailment_kwh = round(curtailed_wh / 1000, 2)
 
-    # Compute consumption curve = generation + grid at each minute
+    # Minutes where EVERY inverter reported. Consumption is derived from total
+    # generation, so a minute missing one inverter yields a figure that dips
+    # toward — and below — zero while the plant is actually producing. Note the
+    # bar is "every inverter we have", not "every inverter currently producing":
+    # the latter would quietly accept a permanently dead one and go back to
+    # drawing an understated curve as though it were measured.
+    # Matched on "YYYY-MM-DDTHH:MM" rather than the full timestamp: the last
+    # window of an aggregateWindow is stamped with now(), so two queries issued
+    # milliseconds apart disagree in the microseconds and the newest point would
+    # always fall into a gap.
+    expected = len(_INVERTER_STRING_COUNT)
+    complete_minutes = {
+        p["x"][:16] for p in _records_xy(f'''
+        from(bucket: "{bucket}")
+          |> range(start: {today})
+          |> filter(fn: (r) => r._measurement == "piko")
+          |> filter(fn: (r) => exists r.inverter)
+          |> filter(fn: (r) => r._field == "ac_power_total")
+          |> aggregateWindow(every: 1m, fn: count, createEmpty: false)
+          |> group(columns: ["_time"])
+          |> count()
+          |> group()
+          |> filter(fn: (r) => r._value == {expected})
+    ''')
+    }
+
+    # Compute consumption curve = generation + grid at each minute, leaving a
+    # gap (y = null) wherever the plant total was incomplete.
     gen_dict = {p["x"]: p["y"] for p in generation}
     grid_dict = {p["x"]: p["y"] for p in grid_curve}
     all_times = sorted(set(gen_dict) | set(grid_dict))
     consumption_curve = [
-        {"x": t, "y": round(gen_dict.get(t, 0) + grid_dict.get(t, 0), 2)}
+        {
+            "x": t,
+            "y": round(gen_dict.get(t, 0) + grid_dict.get(t, 0), 2)
+            if t[:16] in complete_minutes else None,
+        }
         for t in all_times
     ]
 
@@ -1508,7 +1615,10 @@ def get_energia():
 
     return {
         "plant_power_w": round(plant_power_w, 0),
-        "consumption_w": round(max(consumption_w, 0), 0),
+        "consumption_w": None if consumption_w is None else round(max(consumption_w, 0), 0),
+        # Non-empty while any inverter is silent: the UI shows "n/d" for the
+        # fields above and warns that today's PV-derived totals run low.
+        "offline_inverters": [_INVERTER_LABEL.get(t, t) for t in offline],
         "grid_flow_w": round(grid_flow_w, 0),
         "self_consumption_rate": self_consumption_rate,
         "yield_today_kwh": round(gen_today, 1),
@@ -1601,6 +1711,7 @@ def _compute_weighted_costs(omie_hours, import_hours, tariff):
 def get_mercat_omie():
     bucket = INFLUXDB_BUCKET
     today = _today_start_iso()
+    tomorrow = _tomorrow_start_iso()
     month = _month_start_iso()
     tariff = _load_indexed_tariff()
 
@@ -1637,9 +1748,12 @@ def get_mercat_omie():
     )
 
     # --- Today: hourly OMIE prices + hourly import ---
+    # OMIE spans the full day-ahead curve (stop: tomorrow) so the indexed-rate
+    # line covers the whole known day. Cost KPIs are unaffected: hours that
+    # haven't elapsed have no import, so they add nothing to the weighted cost.
     omie_hours_today = _hourly_records(f'''
         from(bucket: "{bucket}")
-          |> range(start: {today})
+          |> range(start: {today}, stop: {tomorrow})
           |> filter(fn: (r) => r._measurement == "omie_prices")
           |> filter(fn: (r) => r._field == "price_eur_kwh")
           |> aggregateWindow(every: 1h, fn: mean, createEmpty: false)
@@ -1676,7 +1790,9 @@ def get_mercat_omie():
     cost_idx_month, cost_fix_month, _, _ = \
         _compute_weighted_costs(omie_hours_month, import_hours_month, tariff)
 
-    # OMIE average today (for day flag)
+    # OMIE average — running (day so far, stop=now) and full day-ahead (all 24h).
+    # The running value climbs through the day as pricier hours elapse; the full
+    # value is the settled day-ahead mean and is what the chart now spans.
     omie_avg_today = _scalar(f'''
         from(bucket: "{bucket}")
           |> range(start: {today})
@@ -1684,18 +1800,26 @@ def get_mercat_omie():
           |> filter(fn: (r) => r._field == "price_eur_mwh")
           |> mean()
     ''')
+    omie_avg_today_full = _scalar(f'''
+        from(bucket: "{bucket}")
+          |> range(start: {today}, stop: {tomorrow})
+          |> filter(fn: (r) => r._measurement == "omie_prices")
+          |> filter(fn: (r) => r._field == "price_eur_mwh")
+          |> mean()
+    ''')
 
-    if omie_avg_today < 20:
+    # Day flag is based on the full day-ahead mean (representative of the whole day).
+    if omie_avg_today_full < 20:
         day_flag = "cheap"
-    elif omie_avg_today > 80:
+    elif omie_avg_today_full > 80:
         day_flag = "expensive"
     else:
         day_flag = "normal"
 
-    # OMIE hourly bar chart (raw spot prices)
+    # OMIE hourly bar chart (raw spot prices) — full day-ahead curve.
     omie_hourly_chart = _records_xy(f'''
         from(bucket: "{bucket}")
-          |> range(start: {today})
+          |> range(start: {today}, stop: {tomorrow})
           |> filter(fn: (r) => r._measurement == "omie_prices")
           |> filter(fn: (r) => r._field == "price_eur_kwh")
     ''')
@@ -1717,6 +1841,7 @@ def get_mercat_omie():
         "diff_month": round(cost_fix_month - cost_idx_month, 2),
         # Day flag
         "omie_avg_today": round(omie_avg_today, 1),
+        "omie_avg_today_full": round(omie_avg_today_full, 1),
         "day_flag": day_flag,
         # Chart data
         "omie_hourly": omie_hourly_chart,
@@ -1726,6 +1851,7 @@ def get_mercat_omie():
 
 def get_inversors():
     bucket = INFLUXDB_BUCKET
+    offline_tags = _offline_inverters()
 
     def _inv(tag):
         status_val = int(_scalar(f'''
@@ -1745,8 +1871,23 @@ def get_inversors():
         rated = PIKO_15_RATED_W if tag == "piko_15" else PIKO_CI_50_RATED_W
         pct = round((power / rated) * 100, 1) if rated else 0.0
 
-        # Derive status from power when the status field is missing or stuck at 0
-        if status_val == 0 and power > 0:
+        # Saying "Apagat" for a dead link hides real outages — the PIKO 15 kept
+        # feeding the grid for 9 days while the dashboard called it off.
+        offline = tag in offline_tags
+
+        # The two inverters speak different status enums, so resolve per family.
+        is_ci = tag == "piko_ci_50"
+        status_map = CI_STATUS_MAP if is_ci else STATUS_MAP
+        class_map = CI_STATUS_CLASS if is_ci else STATUS_CLASS
+
+        if is_ci:
+            # 0 is not a documented CI state — it means no reading reached us
+            # (comms down, or a sample taken before the reg 56/57 fix). Only
+            # infer "producing" from power; never call the CI "off" on a 0.
+            if status_val not in CI_STATUS_MAP:
+                status_val = 6 if power > 0 else 0
+        elif status_val == 0 and power > 0:
+            # PIKO 15: derive status from power when the field is stuck at 0
             status_val = 3  # MPP (Producció)
 
         # AC voltage per phase (from inverter measurement)
@@ -1771,10 +1912,27 @@ def get_inversors():
         # chronic states (fault, unconnected) keep showing correctly at
         # night when the inverter is legitimately off.
         strings = _inverter_strings(tag, _INVERTER_STRING_COUNT.get(tag, 0))
+        if offline:
+            # Same reason _strings_summary skips this inverter: with the link
+            # down every string reads 0 V and classifies as "Desconnectada",
+            # which accuses the panels of a fault that is really in the comms.
+            for s in strings:
+                s["state"] = "nodata"
+                s["state_class"] = "status-idle"
+                s["state_label"] = "Sense dades"
+                s["state_tooltip"] = (
+                    "L'inversor no comunica: no es pot saber l'estat d'aquesta "
+                    "string. No vol dir que estigui desconnectada."
+                )
 
         return {
             "status": status_val,
-            "text": STATUS_MAP.get(status_val, f"Desconegut ({status_val})"),
+            "offline": offline,
+            "text": "Sense comunicació" if offline else status_map.get(
+                status_val, "Sense dades" if is_ci else f"Desconegut ({status_val})"
+            ),
+            "state_class": "status-error" if offline
+                           else class_map.get(status_val, "status-off"),
             "power_w": round(power, 0),
             "power_pct": pct,
             "voltage_l1": voltages["l1"],
@@ -1975,9 +2133,12 @@ def _compute_scenario_costs_month():
     hola_rates = sc_hola.get("energy_eur_kwh", {})
     sper_rates = sc_sper.get("energy_eur_kwh", {})
 
-    iber_surplus_rate = sc_iber.get("surplus_eur_kwh", 0.05)
-    hola_surplus_rate = sc_hola.get("surplus_eur_kwh", 0.05)
-    sper_surplus_rate = sc_sper.get("surplus_eur_kwh", 0.03)
+    # No retailer compensates export while the plant is not legalised (physical
+    # export == 0 registered by the distributor) — see injection._legalised_note.
+    _surplus_mult = 1.0 if _export_is_compensated() else 0.0
+    iber_surplus_rate = sc_iber.get("surplus_eur_kwh", 0.05) * _surplus_mult
+    hola_surplus_rate = sc_hola.get("surplus_eur_kwh", 0.05) * _surplus_mult
+    sper_surplus_rate = sc_sper.get("surplus_eur_kwh", 0.03) * _surplus_mult
 
     # Contract formula params for Som Indexada
     idx_margin = sc_sidx.get("margin_eur_kwh", 0.009680)
@@ -2023,7 +2184,7 @@ def _compute_scenario_costs_month():
             result["surplus_hola"] += exp_kwh * hola_surplus_rate
             result["surplus_sper"] += exp_kwh * sper_surplus_rate
             if omie_price is not None:
-                result["surplus_sidx"] += exp_kwh * omie_price
+                result["surplus_sidx"] += exp_kwh * omie_price * _surplus_mult
             result["total_export"] += exp_kwh
 
     # Handle export-only hours not in all_hours
@@ -2159,13 +2320,15 @@ def get_previsio_factura(mercat_data=None):
     short = {"iberdrola": "iber", "holaluz": "hola",
              "som_periodes": "sper", "som_indexada": "sidx"}
 
-    # Surplus rates for projection
+    # Surplus rates for projection. Zeroed while the plant is not legalised for
+    # export — no retailer pays for uninjected energy (see injection._legalised_note).
     scenarios_cfg = pricing.get("scenarios", {})
+    _surplus_mult = 1.0 if _export_is_compensated() else 0.0
     surplus_rates = {
-        "iberdrola": scenarios_cfg.get("iberdrola", {}).get("surplus_eur_kwh", 0.05),
-        "holaluz": scenarios_cfg.get("holaluz", {}).get("surplus_eur_kwh", 0.05),
-        "som_periodes": scenarios_cfg.get("som_periodes", {}).get("surplus_eur_kwh", 0.03),
-        "som_indexada": actual["avg_omie"] if actual and actual["avg_omie"] > 0 else 0.05,
+        "iberdrola": scenarios_cfg.get("iberdrola", {}).get("surplus_eur_kwh", 0.05) * _surplus_mult,
+        "holaluz": scenarios_cfg.get("holaluz", {}).get("surplus_eur_kwh", 0.05) * _surplus_mult,
+        "som_periodes": scenarios_cfg.get("som_periodes", {}).get("surplus_eur_kwh", 0.03) * _surplus_mult,
+        "som_indexada": (actual["avg_omie"] if actual and actual["avg_omie"] > 0 else 0.05) * _surplus_mult,
     }
 
     if actual and profile:
@@ -2840,6 +3003,7 @@ def get_amortitzacio_data():
     tariff = _load_indexed_tariff()
     iber_rates = _get_energy_rates()
     iber_surplus = _get_injection_price()
+    export_compensated = _export_is_compensated()
 
     cf = tariff.get("contract_formula", {})
     cf_mult = cf.get("adjustment_multiplier", 1.0)
@@ -2935,8 +3099,8 @@ def get_amortitzacio_data():
             monthly[month_key]["self_cons_savings_idx"] += self_cons_kwh * indexed_rate
             monthly[month_key]["self_cons_savings_iber"] += self_cons_kwh * iber_rate
 
-        # Surplus income
-        if exp_kwh > 0:
+        # Surplus income — only if the plant is legalised for export
+        if exp_kwh > 0 and export_compensated:
             monthly[month_key]["surplus_income_idx"] += exp_kwh * omie_price
             monthly[month_key]["surplus_income_iber"] += exp_kwh * iber_surplus
 
@@ -3254,6 +3418,7 @@ def reconstruct_indexed_bill(start_date_str, end_date_str, apply_calibration=Tru
     total_import = 0.0
     total_export = 0.0
     total_energy_cost = 0.0
+    export_compensated = _export_is_compensated()
     total_surplus = 0.0
 
     for hour in all_hours:
@@ -3286,7 +3451,11 @@ def reconstruct_indexed_bill(start_date_str, end_date_str, apply_calibration=Tru
             total_energy_cost += imp_kwh * indexed_rate
 
         if exp_kwh > 0:
-            total_surplus += exp_kwh * omie_price
+            # Only credit surplus when the plant is legalised for export;
+            # otherwise the distributor registers no compensable export and the
+            # real invoice has no compensacio line (see injection._legalised_note).
+            if export_compensated:
+                total_surplus += exp_kwh * omie_price
             total_export += exp_kwh
 
     # Compute average rate per period

@@ -293,26 +293,39 @@ CI_FLOAT_REGS = {
     168: "ac_power_l3",
     170: "ac_voltage_l3",
     172: "ac_power_total",
+    # Per-string DC. The strings do NOT follow a uniform stride on this CI 50:
+    # each one is current, power, then voltage 6 registers later. Taken from the
+    # KOSTAL PIKO CI MODBUS interface description, register table p. 30.
+    #
+    # A previous map paired each string's voltage with the NEXT string's current
+    # and power (s1←DC2, s2←DC3, s3←DC1). That survived the 2026-07-03 solar-noon
+    # scan because a rotation preserves Σ(p_s1..s4) ≈ dc_power_total exactly, and
+    # V*I≈P still held while the strings sat at similar voltages. Corrected and
+    # re-validated live 2026-08-09 on a day with dissimilar strings (563 W vs
+    # 87 W): P/(V*I) = 1.07 / 1.01 / 1.07 / 1.02 across all four. Totals were
+    # never affected — only which string got blamed. See scan_ci_strings.py.
+    258: "dc_current_string1",
+    260: "dc_power_string1",
     266: "dc_voltage_string1",
-    268: "dc_current_string1",
-    270: "dc_power_string1",
+    268: "dc_current_string2",
+    270: "dc_power_string2",
     276: "dc_voltage_string2",
-    278: "dc_current_string2",
-    280: "dc_power_string2",
+    278: "dc_current_string3",
+    280: "dc_power_string3",
     286: "dc_voltage_string3",
-    # Strings 3 & 4 do NOT follow the +10 stride of strings 1/2 on this CI 50
-    # firmware. Correct current/power registers found by live solar-noon scan
-    # 2026-07-03 (validated: per-string V*I≈P AND Σ(p_s1..s4)≈dc_power_total to
-    # 99.9%). The old guessed map (288/290 + 296/298/300) read 0 and produced
-    # false "string 3 dead / string 4 unconnected" alerts. See scan_ci_strings.py.
-    258: "dc_current_string3",
-    260: "dc_power_string3",
-    308: "dc_voltage_string4",
     300: "dc_current_string4",
     302: "dc_power_string4",
+    308: "dc_voltage_string4",
 }
 
-CI_STATUS_REG = 56  # uint16, single register
+# "Inverter state". KOSTAL's own table (PIKO CI MODBUS interface description,
+# 0x38/56) labels the format U16 but gives N = 2 registers: the value arrives as
+# a big-endian word pair with the payload in the LOW register, so reg 56 is
+# always 0 and reg 57 carries the state. Reading only reg 56 pinned status to 0
+# for the whole history, which made the dashboard print "Apagat" whenever the
+# zero-export limiter held AC power at 0 W. The neighbouring Power-ID (reg 54,
+# also "U16, N=2") confirms the layout: reg 55 reads 50050 on this PIKO CI 50.
+CI_STATUS_REG = 56
 
 
 def _read_float32(client, register):
@@ -324,12 +337,12 @@ def _read_float32(client, register):
     return struct.unpack(">f", raw)[0]
 
 
-def _read_uint16(client, register):
-    """Read a single uint16 holding register."""
-    result = client.read_holding_registers(register, count=1)
+def _read_uint32(client, register):
+    """Read a big-endian uint32 from two holding registers."""
+    result = client.read_holding_registers(register, count=2)
     if result.isError():
         return None
-    return result.registers[0]
+    return (result.registers[0] << 16) | result.registers[1]
 
 
 _last_yield_total = None  # monotonic guard across polls
@@ -384,7 +397,7 @@ def poll_piko_ci():
         point = Point("piko").tag("inverter", "piko_ci_50")
 
         # Status (uint16)
-        status = _read_uint16(client, CI_STATUS_REG)
+        status = _read_uint32(client, CI_STATUS_REG)
         if status is not None:
             point = point.field("status", int(status))
 
@@ -469,8 +482,9 @@ def poll_ksem():
             if val is not None:
                 point = point.field(name, float(val))
 
-        # Voltage (uint16)
-        for name, off in [("voltage_l1", 5), ("voltage_l2", 6), ("voltage_l3", 7)]:
+        # Voltage (uint16) — offset 5 is PhV (average LN), which this meter
+        # reports as "not implemented"; the per-phase values start at 6.
+        for name, off in [("voltage_l1", 6), ("voltage_l2", 7), ("voltage_l3", 8)]:
             val = _sunspec_uint16(d[off], v_sf)
             if val is not None:
                 point = point.field(name, float(val))
@@ -480,7 +494,8 @@ def poll_ksem():
         if val is not None:
             point = point.field("frequency", float(val))
 
-        # Power — signed int16 (positive = export, negative = import per SunSpec)
+        # Power — signed int16 (positive = import, negative = export; verified
+        # at night with PV=0, where active_power_total reads positive)
         for name, off in [("active_power_total", 16), ("active_power_l1", 17),
                           ("active_power_l2", 18), ("active_power_l3", 19)]:
             val = _sunspec_int16(d[off], w_sf)
@@ -523,8 +538,22 @@ def _cet_now():
 
 
 def _parse_omie_file(text, target_date):
-    """Parse OMIE marginalpdbc flat file. Returns list of (datetime, eur_mwh) tuples."""
+    """Parse OMIE marginalpdbc flat file. Returns list of (datetime, eur_mwh) tuples.
+
+    Layout: YYYY;MM;DD;period;price_PT;price_ES;
+    We want the Spanish system marginal price, which is column index 5 (parts[5]).
+    Column index 4 is Portugal — the two coincide most days (shared MIBEL market)
+    but diverge when the interconnection saturates, so reading the wrong one is a
+    real error on those days.
+    """
     prices = []
+    # Anchor each period to real elapsed time from local midnight so DST transition
+    # days work: 92-period (spring-forward) and 100-period (fall-back) days both map
+    # correctly because we add real duration to a UTC anchor instead of building a
+    # naive wall-clock time (02:00-03:00 doesn't exist / 02:00-03:00 repeats locally).
+    midnight_utc = datetime(
+        target_date.year, target_date.month, target_date.day, tzinfo=MADRID_TZ
+    ).astimezone(timezone.utc)
     for line in text.strip().splitlines():
         parts = line.split(";")
         if len(parts) < 6:
@@ -532,16 +561,16 @@ def _parse_omie_file(text, target_date):
         try:
             year, month, day = int(parts[0]), int(parts[1]), int(parts[2])
             period = int(parts[3])
-            price_spain = float(parts[4].replace(",", "."))
+            price_spain = float(parts[5].replace(",", "."))
         except (ValueError, IndexError):
             continue
         if year != target_date.year or month != target_date.month or day != target_date.day:
             continue
-        if period < 1 or period > 96:
+        # Up to 100 quarter-hourly periods (25h fall-back DST day); normally 96.
+        if period < 1 or period > 100:
             continue
-        # Period 1 = 00:00-00:15, Period 2 = 00:15-00:30, etc.
-        minutes = (period - 1) * 15
-        ts = datetime(year, month, day, minutes // 60, minutes % 60, tzinfo=MADRID_TZ)
+        # Period 1 = first quarter-hour after local midnight, period 2 the next, etc.
+        ts = midnight_utc + timedelta(minutes=(period - 1) * 15)
         prices.append((ts, price_spain))
     return prices
 

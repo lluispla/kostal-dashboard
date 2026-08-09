@@ -18,6 +18,17 @@ app.secret_key = os.urandom(24)
 os.makedirs(INVOICES_DIR, exist_ok=True)
 
 
+@app.template_filter("nd")
+def _format_or_nd(value, spec="%.0f"):
+    """Format a number, or render 'n/d' when it is None.
+
+    data.py returns None for anything it cannot measure (e.g. consumption while
+    an inverter is offline). Formatting that as a number would print a confident
+    0 for a quantity nobody knows.
+    """
+    return "n/d" if value is None else spec % value
+
+
 # ---------------------------------------------------------------------------
 # Dashboard
 # ---------------------------------------------------------------------------

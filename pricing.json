@@ -10,11 +10,11 @@
       "adjustment_multiplier": 1.015,
       "other_costs_eur_kwh": 0.046108,
       "other_costs_eur_kwh_by_period": {
-        "P4": 0.041671,
+        "P4": 0.023751,
         "P5": 0.016746,
-        "P6": 0.034183,
+        "P6": 0.022383,
         "P2": 0.060458,
-        "P3": 0.031193
+        "P3": 0.0373
       },
       "loss_coefficient": 0.12,
       "efficiency_fund_eur_kwh": 0.001,
@@ -72,7 +72,9 @@
   },
   "injection": {
     "surplus_type": "omie",
-    "price_eur_kwh": 0.0
+    "price_eur_kwh": 0.0,
+    "legalised_for_export": false,
+    "_legalised_note": "Plant is NOT legalised for export: a zero-export limiter is active and the distributor registers no compensable surplus, so Som invoices carry NO compensacio line (verified on FE2600807696, June 2026). When false, the bill/economics credit ZERO surplus compensation for ALL retailers (physical export=0 applies regardless of contract). The theoretical value of would-be export lives in the separate export-assessment analyses, not here. Set true only once the plant is legalised and the meter registers compensable export."
   },
   "indexed_tariff": {
     "peajes_eur_kwh": {
@@ -392,7 +394,9 @@
         "efficiency_fund_eur_kwh": 0.001,
         "other_costs_eur_kwh_by_period": {
           "P2": 0.060458,
-          "P3": 0.031193
+          "P3": 0.0373,
+          "P4": 0.023751,
+          "P6": 0.022383
         }
       },
       "power_charges_eur_kw_year": {
@@ -419,45 +423,75 @@
     "azimuth_deg": -12,
     "temp_coeff_per_c": -0.0035,
     "noct_c": 45,
-    "rated_efficiency": 0.80,
+    "rated_efficiency": 0.8,
     "low_light_knee_w": 500.0,
-    "low_light_exp": 0.40,
+    "low_light_exp": 0.4,
     "arrays": [
-      {"name": "ci50", "inverter": "piko_ci_50", "tilt_deg": 35, "azimuth_deg": -12, "kwp": 44.0},
-      {"name": "piko15", "inverter": "piko_15", "tilt_deg": 18, "azimuth_deg": 15, "kwp": 18.0}
+      {
+        "name": "ci50",
+        "inverter": "piko_ci_50",
+        "tilt_deg": 35,
+        "azimuth_deg": -12,
+        "kwp": 44.0
+      },
+      {
+        "name": "piko15",
+        "inverter": "piko_15",
+        "tilt_deg": 18,
+        "azimuth_deg": 15,
+        "kwp": 18.0
+      }
     ],
     "fitted_on": "2026-07-04",
-    "fit_days_ci50": ["2026-05-26", "2026-05-27", "2026-05-28", "2026-05-29", "2026-05-31", "2026-06-11", "2026-06-14", "2026-06-16", "2026-06-17", "2026-06-22", "2026-06-26", "2026-06-27", "2026-06-30", "2026-07-01"],
-    "fit_days_piko15": ["2026-04-23", "2026-04-28", "2026-05-28", "2026-05-29", "2026-05-30", "2026-06-12", "2026-06-16", "2026-06-17", "2026-06-22", "2026-06-24", "2026-06-30", "2026-07-01", "2026-07-02", "2026-07-03"]
+    "fit_days_ci50": [
+      "2026-05-26",
+      "2026-05-27",
+      "2026-05-28",
+      "2026-05-29",
+      "2026-05-31",
+      "2026-06-11",
+      "2026-06-14",
+      "2026-06-16",
+      "2026-06-17",
+      "2026-06-22",
+      "2026-06-26",
+      "2026-06-27",
+      "2026-06-30",
+      "2026-07-01"
+    ],
+    "fit_days_piko15": [
+      "2026-04-23",
+      "2026-04-28",
+      "2026-05-28",
+      "2026-05-29",
+      "2026-05-30",
+      "2026-06-12",
+      "2026-06-16",
+      "2026-06-17",
+      "2026-06-22",
+      "2026-06-24",
+      "2026-06-30",
+      "2026-07-01",
+      "2026-07-02",
+      "2026-07-03"
+    ]
   },
   "ksem_calibration": {
     "factors": {
-      "P1": null,
-      "P2": 1.12,
-      "P3": 1.1032,
-      "P4": 1.1852,
+      "P1": 1.0916,
+      "P2": 1.1271,
+      "P3": 1.0828,
+      "P4": 1.1019,
       "P5": 0.9566,
-      "P6": 1.2311
+      "P6": 1.192
     },
-    "overall": 1.1535,
-    "total_calibration_kwh": 10961.0,
-    "invoices_used": [
-      {
-        "filename": "FE2600536543.pdf",
-        "period": "01/04/2026 - 30/04/2026",
-        "invoice_kwh": 4201.0,
-        "ksem_kwh": 3666.0,
-        "overall_factor": 1.1459
-      },
-      {
-        "filename": "FE2600698309.pdf",
-        "period": "01/05/2026 - 31/05/2026",
-        "invoice_kwh": 4875.0,
-        "ksem_kwh": 4149.1,
-        "overall_factor": 1.175
-      }
-    ],
-    "last_updated": "2026-06-26"
+    "overall": 1.1242,
+    "total_calibration_kwh": 5987.0,
+    "matched_hours": 1175,
+    "period": "2026-06-01 to 2026-07-19",
+    "last_updated": "2026-07-20",
+    "_note": "Auto-calibrated from official hourly meter data (infoenergia CSV).",
+    "_p5_note": "P5 preservat de la calibracio abril+maig (FE2600536543/FE2600698309): juny (grup C) i juliol (grup A) no contenen hores P5."
   },
   "calibration_history": [
     {
@@ -476,6 +510,21 @@
       "total_kwh": 1885.0,
       "other_costs": 0.046108,
       "from_invoice": "FE2600318459.pdf"
+    },
+    {
+      "date": "2026-07-20",
+      "period": "2026-06-01 to 2026-07-19",
+      "ksem_overall": 1.1242,
+      "ksem_factors": {
+        "P1": 1.0916,
+        "P2": 1.1271,
+        "P3": 1.0828,
+        "P4": 1.1019,
+        "P5": null,
+        "P6": 1.192
+      },
+      "matched_hours": 1175,
+      "total_kwh": 5987.0
     }
   ]
 }

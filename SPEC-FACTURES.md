@@ -134,14 +134,34 @@ of data. It will grow over time (infinite retention).
 
 ### 3.0TD period schedule
 
+This is the official BOE 3.0TD scheme with **month-rotating** periods, as implemented
+in `_get_period()` / `_MONTH_TO_PERIODS` in `dashboard/data.py`. The period a given
+hour maps to depends on the month group, not a fixed weekly table.
+
+Fixed rules (same every month):
 ```
-P1: Mon-Fri 10-14           (Punta — most expensive)
-P2: Mon-Fri 8-10, 14-18     (Pla)
-P3: Mon-Fri 18-22           (Pla vespre)
-P4: Sat 8-18                (Dissabte)
-P5: Mon-Fri 0-8, 22-24 + Sat 0-8, 18-24  (Vall)
-P6: Sun all day + holidays   (Supervall — cheapest)
+Weekends (Sat + Sun) and holidays  → P6  (all day)
+Weekday nights  00:00–08:00        → P6
 ```
+
+Weekday daytime hours are split into **peak** and **shoulder** bands, and which period
+each band maps to rotates by month group:
+```
+Peak     (punta)  hours: 10–14 and 18–22
+Shoulder (pla)    hours: 08–10, 14–18, 22–24
+```
+
+| Month group | Months            | Peak → | Shoulder → |
+|-------------|-------------------|--------|------------|
+| A (alta)          | Jan, Feb, Jul, Dec | P1 | P2 |
+| B (mitjana-alta)  | Mar, Nov           | P2 | P3 |
+| C (mitjana)       | Jun, Aug, Sep      | P3 | P4 |
+| D (baixa)         | Apr, May, Oct      | P4 | P5 |
+
+So e.g. in **July** (group A): weekday 10–14 & 18–22 = P1, weekday 08–10/14–18/22–24 = P2,
+weekday nights = P6, and all Sat/Sun/holidays = P6. In **April** (group D) the same peak
+hours are P4 and shoulder hours P5. P1 only ever appears in group-A months; P6 covers all
+nights, weekends and holidays year-round.
 
 ### What the Configuració page does
 

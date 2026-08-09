@@ -12,7 +12,13 @@ function updateFields(data) {
             if (val == null) return;
             val = val[key];
         }
-        if (val == null) return;
+        if (val == null) {
+            // data-nd marks a field the backend may report as unmeasurable.
+            // Without it, a null would silently leave the last good value on
+            // screen, which is how a stale number outlives the data behind it.
+            if (el.hasAttribute('data-nd')) el.textContent = 'n/d';
+            return;
+        }
         el.textContent = el.hasAttribute('data-fmt')
             ? formatValue(val, el.getAttribute('data-fmt'))
             : val;
@@ -68,6 +74,9 @@ function refreshDashboard() {
             if (data.mercat) {
                 updateOmieHourly(data.mercat);
             }
+
+            /* Incomplete-data banner */
+            updateOfflineWarning(data.energia && data.energia.offline_inverters);
 
             /* Inverter status badges */
             updateInverterBadge('inv-piko15-badge', data.inversors.piko_15);
@@ -131,11 +140,30 @@ function refreshDashboard() {
         .catch(err => console.warn('Refresh failed:', err));
 }
 
+function updateOfflineWarning(offline) {
+    const el = document.getElementById('offline-warning');
+    if (!el) return;
+    if (!offline || !offline.length) {
+        el.style.display = 'none';
+        return;
+    }
+    const txt = document.getElementById('offline-warning-text');
+    if (txt) {
+        txt.textContent = offline.join(', ') +
+            (offline.length > 1 ? ' no comuniquen. ' : ' no comunica. ') +
+            "La seva producció no es pot mesurar, així que el consum surt com a " +
+            "n/d i la generació i els percentatges d'avui queden per sota del real.";
+    }
+    el.style.display = '';
+}
+
 function updateInverterBadge(id, inv) {
     const el = document.getElementById(id);
     if (!el) return;
     el.textContent = inv.text;
-    el.className = 'status-badge ' + statusClass(inv.status);
+    // Prefer the class the backend resolved: the PIKO 15 and the PIKO CI 50 use
+    // different status enums, so a bare code cannot be classified here.
+    el.className = 'status-badge ' + (inv.state_class || statusClass(inv.status));
 }
 
 function updateOvervoltageBadge(id, inv) {
