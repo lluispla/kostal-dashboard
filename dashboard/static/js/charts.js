@@ -123,10 +123,11 @@ function _initGen(data) {
 }
 
 /* -- 1b. Consumption ------------------------------------------------------ */
-function _initCons(data) {
+function _initCons(data, estData) {
     const ctx = document.getElementById('chart-consumption');
     if (!ctx) return;
     var datasets = [{
+        label: 'Mesurat',
         data: data,
         borderColor: COLORS.navy,
         backgroundColor: 'rgba(0,43,91,0.10)',
@@ -135,6 +136,21 @@ function _initCons(data) {
         pointRadius: 0,
         borderWidth: dashShowEma ? 1 : 2,
     }];
+    // Minutes an offline inverter had to be modelled for. Dashed and unfilled so
+    // it never reads as measurement at a glance.
+    var hasEst = estData && estData.some(p => p.y != null);
+    if (hasEst) {
+        datasets.push({
+            label: 'Estimat (inversor sense comunicació)',
+            data: estData,
+            borderColor: COLORS.navy,
+            borderDash: [6, 4],
+            borderWidth: 2,
+            fill: false,
+            tension: 0.3,
+            pointRadius: 0,
+        });
+    }
     if (dashShowEma) {
         datasets.push(_emaDs('EMA', data, COLORS.navy, POWER_EMA_PERIOD));
     }
@@ -145,8 +161,11 @@ function _initCons(data) {
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
-                legend: { display: dashShowEma, position: 'top', labels: { usePointStyle: true, boxWidth: 8 } },
-                tooltip: { callbacks: { label: c => c.parsed.y.toLocaleString('ca') + ' W' } },
+                legend: { display: dashShowEma || hasEst, position: 'top', labels: { usePointStyle: true, boxWidth: 8 } },
+                tooltip: { callbacks: {
+                    label: c => (c.dataset.label ? c.dataset.label + ': ' : '') +
+                                c.parsed.y.toLocaleString('ca') + ' W',
+                }},
             },
             scales: { x: _powerXAxis(), y: {
                 position: 'right',
@@ -279,7 +298,7 @@ function initPowerCurve(data, forecast) {
     lastPowerData = data;
     if (forecast) lastForecastData = forecast;
     _initGen(data.generation);
-    _initCons(data.consumption);
+    _initCons(data.consumption, data.consumption_est);
     _initGrid(data.grid);
     _initVoltage(data.voltage_l1 || [], data.voltage_l2 || [], data.voltage_l3 || []);
 }
@@ -292,7 +311,7 @@ function updatePowerCurve(data, forecast) {
     if (chartGrid) chartGrid.destroy();
     if (chartVoltage) chartVoltage.destroy();
     _initGen(data.generation);
-    _initCons(data.consumption);
+    _initCons(data.consumption, data.consumption_est);
     _initGrid(data.grid);
     _initVoltage(data.voltage_l1 || [], data.voltage_l2 || [], data.voltage_l3 || []);
 }

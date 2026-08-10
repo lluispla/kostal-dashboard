@@ -32,8 +32,13 @@
             <div class="label">Consum Addwerk ara</div>
             <div class="description">Potència consumida al local (autoconsum + xarxa)</div>
             <div class="value val-navy">
-                <span data-field="energia.consumption_w" data-fmt="0" data-nd>{{ d.energia.consumption_w|nd("%.0f") }}</span>
+                <span id="cons-est-prefix">{% if d.energia.consumption_estimated %}~{% endif %}</span><span data-field="energia.consumption_w" data-fmt="0" data-nd>{{ d.energia.consumption_w|nd("%.0f") }}</span>
                 <span class="unit">W</span>
+            </div>
+            <div class="estimate-note" id="cons-est-note"
+                 {% if not d.energia.consumption_estimated %}style="display:none;"{% endif %}>
+                Estimat: inclou la producció modelada del
+                {{ d.energia.offline_inverters|join(', ') }}
             </div>
         </div>
         {% set pct = d.economia.cost_percentile.today_pct %}

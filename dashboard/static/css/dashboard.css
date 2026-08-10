@@ -1739,3 +1739,12 @@ body.kiosk .chart-wrap h3 {
     border-radius: 4px;
     font-size: 0.9rem;
 }
+
+/* Marker under a KPI whose value is partly modelled rather than measured. */
+.estimate-note {
+    margin-top: 0.3rem;
+    font-size: 0.72rem;
+    font-style: italic;
+    color: #856404;
+    line-height: 1.25;
+}

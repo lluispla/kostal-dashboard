@@ -75,8 +75,9 @@ function refreshDashboard() {
                 updateOmieHourly(data.mercat);
             }
 
-            /* Incomplete-data banner */
+            /* Incomplete-data banner + "estimated" marker on the consum card */
             updateOfflineWarning(data.energia && data.energia.offline_inverters);
+            updateEstimateMarker(data.energia);
 
             /* Inverter status badges */
             updateInverterBadge('inv-piko15-badge', data.inversors.piko_15);
@@ -155,6 +156,20 @@ function updateOfflineWarning(offline) {
             "n/d i la generació i els percentatges d'avui queden per sota del real.";
     }
     el.style.display = '';
+}
+
+function updateEstimateMarker(en) {
+    const prefix = document.getElementById('cons-est-prefix');
+    const note = document.getElementById('cons-est-note');
+    const est = !!(en && en.consumption_estimated);
+    if (prefix) prefix.textContent = est ? '~' : '';
+    if (note) {
+        note.style.display = est ? '' : 'none';
+        if (est && en.offline_inverters && en.offline_inverters.length) {
+            note.textContent = 'Estimat: inclou la producció modelada del ' +
+                en.offline_inverters.join(', ');
+        }
+    }
 }
 
 function updateInverterBadge(id, inv) {

@@ -1231,6 +1231,177 @@ def _fetch_plane_power(cfg, is_v2, plane):
     return times, power
 
 
+_offline_forecast_cache = {"data": None, "fetched": None, "tags": None}
+_plane_curve_cache = {}  # inverter tag -> {"data": {t_str: w}, "fetched": dt}
+
+# A sky factor outside this range means the reference array is throttled, shaded
+# or misreporting rather than telling us about cloud cover — don't propagate it.
+_SKY_FACTOR_BOUNDS = (0.15, 1.30)
+
+
+def _array_curve(cfg, is_v2, array):
+    """Modelled 15-min power for one configured array, cached per inverter."""
+    tag = array.get("inverter")
+    now = _cet_now()
+    cached = _plane_curve_cache.get(tag)
+    if cached and now - cached["fetched"] < _FORECAST_CACHE_TTL:
+        return cached["data"]
+    plane = {
+        "name": array.get("name", tag or "array"),
+        "tilt": array.get("tilt_deg", cfg["tilt_deg"]),
+        "azimuth": array.get("azimuth_deg", cfg["azimuth_deg"]),
+        "kwp": array.get("kwp", 0.0),
+    }
+    _, power = _fetch_plane_power(cfg, is_v2, plane)
+    _plane_curve_cache[tag] = {"data": power, "fetched": now}
+    return power
+
+
+def _sky_factors(cfg, is_v2, arrays, offline_tags):
+    """Per-slot measured/modelled ratio for the arrays we CAN still see.
+
+    The forecast models potential output under the predicted sky. On a day
+    cloudier than forecast it over-predicts — measured against the CI 50 today
+    it ran 1.5x high even during import, when the export limiter cannot be
+    throttling anything. Since every array sits under the same sky, that ratio
+    is the correction to carry onto the array we cannot see.
+
+    Slots where the plant was exporting are skipped: there the shortfall is the
+    zero-export limiter throttling the inverter, not cloud, and folding it in
+    would suppress the estimate for the wrong reason. Returns
+    ({slot: factor}, median_factor) — the median covers skipped slots.
+    """
+    online = [a for a in arrays if a.get("inverter") not in offline_tags]
+    if not online:
+        return {}, None
+
+    modelled = {}
+    for a in online:
+        try:
+            for t_str, w in _array_curve(cfg, is_v2, a).items():
+                modelled[t_str] = modelled.get(t_str, 0.0) + w
+        except Exception as e:
+            _log.error("Sky calibration: plane fetch failed for '%s': %s",
+                       a.get("name", "?"), e)
+            return {}, None
+
+    bucket, today = INFLUXDB_BUCKET, _today_start_iso()
+    tags = "|".join(a["inverter"] for a in online if a.get("inverter"))
+    measured = _records_xy(f'''
+        from(bucket: "{bucket}")
+          |> range(start: {today})
+          |> filter(fn: (r) => r._measurement == "piko" and r.inverter =~ /^({tags})$/)
+          |> filter(fn: (r) => r._field == "ac_power_total")
+          |> aggregateWindow(every: 15m, fn: mean, createEmpty: false)
+          |> group(columns: ["_time"])
+          |> sum()
+          |> group()
+    ''')
+    grid = {p["x"]: p["y"] for p in _records_xy(f'''
+        from(bucket: "{bucket}")
+          |> range(start: {today})
+          |> filter(fn: (r) => r._measurement == "ksem" and r._field == "active_power_total")
+          |> aggregateWindow(every: 15m, fn: mean, createEmpty: false)
+    ''')}
+
+    factors = {}
+    for p in measured:
+        gv = grid.get(p["x"])
+        if gv is None or gv <= 200:      # exporting or balanced -> possibly limited
+            continue
+        slot_dt = datetime.fromisoformat(p["x"]).astimezone(_CET)
+        slot = slot_dt.replace(minute=(slot_dt.minute // 15) * 15,
+                               second=0, microsecond=0).strftime("%Y-%m-%dT%H:%M")
+        model_w = modelled.get(slot)
+        if not model_w or model_w < 500 or p["y"] is None:
+            continue                      # too dark to divide meaningfully
+        f = p["y"] / model_w
+        if _SKY_FACTOR_BOUNDS[0] <= f <= _SKY_FACTOR_BOUNDS[1]:
+            factors[slot] = f
+
+    if not factors:
+        return {}, None
+    ordered = sorted(factors.values())
+    return factors, ordered[len(ordered) // 2]
+
+
+def _offline_array_forecast(offline_tags):
+    """Modelled 15-min AC power for the arrays whose inverter has gone silent.
+
+    Returns {"YYYY-MM-DDTHH:MM": watts}, or {} when nothing can be modelled.
+
+    These are exactly the planes _resolve_forecast_planes drops from the
+    production forecast when an inverter stops reporting, so the hole is filled
+    with the same physics that models the rest of the plant rather than a
+    second, unrelated guess.
+
+    The result is MODELLED, never measured. It may only reach the screen behind
+    an "estimat" marker, and must not feed anything that bills — no invoice
+    reconstruction, no tariff comparison, no compensation maths.
+    """
+    if not offline_tags:
+        return {}
+
+    key = tuple(sorted(offline_tags))
+    now = _cet_now()
+    cache = _offline_forecast_cache
+    if (cache["data"] is not None and cache["fetched"] and cache["tags"] == key
+            and now - cache["fetched"] < _FORECAST_CACHE_TTL):
+        return cache["data"]
+
+    cfg = _load_solar_config()
+    is_v2 = cfg["model"] == "v2"
+    arrays = cfg.get("arrays") if is_v2 else None
+    if not arrays:
+        # Without per-array geometry there is no way to isolate one inverter's
+        # share of a single blended plant curve.
+        return {}
+
+    merged = {}
+    for a in arrays:
+        if a.get("inverter") not in offline_tags:
+            continue
+        try:
+            power = _array_curve(cfg, is_v2, a)
+        except Exception as e:
+            _log.error("Offline-array forecast failed for plane '%s': %s",
+                       a.get("name", "?"), e)
+            continue
+        for t_str, w in power.items():
+            merged[t_str] = merged.get(t_str, 0.0) + w
+
+    # Correct the modelled potential to the sky the reference array actually
+    # saw. Without this the estimate runs high on any day cloudier than the
+    # forecast, and it inflates consumption rather than merely being vague.
+    factors, median_factor = _sky_factors(cfg, is_v2, arrays, offline_tags)
+    if median_factor is not None:
+        merged = {t: w * factors.get(t, median_factor) for t, w in merged.items()}
+        _log.info("Offline-array forecast calibrated: median sky factor %.2f "
+                  "(%d unconstrained slots)", median_factor, len(factors))
+    else:
+        _log.warning("Offline-array forecast NOT calibrated: no unconstrained "
+                     "reference slots today — estimate may run high")
+
+    # Only cache a real result, so a fetch failure retries instead of pinning an
+    # empty curve for an hour.
+    if merged:
+        cache.update({"data": merged, "fetched": now, "tags": key})
+    return merged
+
+
+def _forecast_w_at(curve, when):
+    """Read a 15-min forecast grid at `when`, flooring to its slot.
+
+    Returns None when the grid is empty (nothing modelled), but 0.0 when the
+    grid exists and simply has no sample for that slot — _fetch_plane_power
+    omits zero-irradiance samples, so a missing slot means night, not ignorance.
+    """
+    if not curve:
+        return None
+    slot = when.replace(minute=(when.minute // 15) * 15, second=0, microsecond=0)
+    return curve.get(slot.strftime("%Y-%m-%dT%H:%M"), 0.0)
+
+
 def get_solar_forecast():
     """Fetch solar irradiance forecast from Open-Meteo and convert to expected power.
 
@@ -1466,10 +1637,19 @@ def get_energia():
     # ...but only if we can see the whole plant. A silent inverter contributes 0
     # to plant_power_w while its output still shows up in the meter as export,
     # so the sum goes negative and clamps to a flat, confident "0 W" during a
-    # comms outage. Publish None instead: unknown is not zero.
+    # comms outage. Fill its share from the forecast model instead, and flag the
+    # result as estimated; if it cannot be modelled at all, publish None, because
+    # unknown is not zero.
     offline = _offline_inverters()
+    offline_curve = _offline_array_forecast(offline)
+    consumption_estimated = False
     if offline:
-        consumption_w = None
+        missing_w = _forecast_w_at(offline_curve, _cet_now())
+        if missing_w is None:
+            consumption_w = None
+        else:
+            consumption_w += missing_w
+            consumption_estimated = True
 
     # Today's energy for self-consumption rate and consumption breakdown
     gen_today = _generation_kwh(today)
@@ -1588,14 +1768,26 @@ def get_energia():
     gen_dict = {p["x"]: p["y"] for p in generation}
     grid_dict = {p["x"]: p["y"] for p in grid_curve}
     all_times = sorted(set(gen_dict) | set(grid_dict))
-    consumption_curve = [
-        {
+    # Two series that tile the day: `consumption` holds the minutes where every
+    # inverter reported, `consumption_est` the reconstructed ones. Separate
+    # datasets keep the estimate visually distinct instead of hiding it inside
+    # one continuous line that looks equally measured end to end.
+    consumption_curve = []
+    consumption_est_curve = []
+    for t in all_times:
+        measured = gen_dict.get(t, 0) + grid_dict.get(t, 0)
+        if t[:16] in complete_minutes:
+            consumption_curve.append({"x": t, "y": round(measured, 2)})
+            consumption_est_curve.append({"x": t, "y": None})
+            continue
+        consumption_curve.append({"x": t, "y": None})
+        # The curve timestamps are UTC; the forecast grid is Europe/Madrid local.
+        local = datetime.fromisoformat(t).astimezone(_CET)
+        missing = _forecast_w_at(offline_curve, local)
+        consumption_est_curve.append({
             "x": t,
-            "y": round(gen_dict.get(t, 0) + grid_dict.get(t, 0), 2)
-            if t[:16] in complete_minutes else None,
-        }
-        for t in all_times
-    ]
+            "y": round(max(measured + missing, 0.0), 2) if missing is not None else None,
+        })
 
     # Daily yield 30d — use mean power × 24h approximation (reliable when
     # yield_total counters are stuck)
@@ -1616,6 +1808,9 @@ def get_energia():
     return {
         "plant_power_w": round(plant_power_w, 0),
         "consumption_w": None if consumption_w is None else round(max(consumption_w, 0), 0),
+        # True when consumption_w includes a forecast-modelled inverter, so the
+        # UI can mark it "~ estimat" rather than passing it off as measured.
+        "consumption_estimated": consumption_estimated,
         # Non-empty while any inverter is silent: the UI shows "n/d" for the
         # fields above and warns that today's PV-derived totals run low.
         "offline_inverters": [_INVERTER_LABEL.get(t, t) for t in offline],
@@ -1630,6 +1825,7 @@ def get_energia():
         "power_curve": {
             "generation": generation,
             "consumption": consumption_curve,
+            "consumption_est": consumption_est_curve,
             "grid": grid_curve,
             "voltage_l1": voltage_l1,
             "voltage_l2": voltage_l2,
