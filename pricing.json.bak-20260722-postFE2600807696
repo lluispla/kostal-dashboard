@@ -1,0 +1,528 @@
+{
+  "tariff": "3.0TD",
+  "supplier": "Som Energia",
+  "tariff_mode": "indexed",
+  "energy": {
+    "indexed": true,
+    "contract_formula": {
+      "_comment": "PH = 1.015 × [(PHM + Pc + Sc + Dsv + GdO + POsOm) × (1 + Perd) + FE + F] + PTD + CA",
+      "_other_costs_note": "other_costs is period- AND season-dependent. Per-period values back-calculated from FULL-month official meter data + invoice rates (kWh-weighted) via tools/calibrate_other_costs.py: P4/P5/P6 from Apr+May 2026 (summer), P2/P3 from March 2026 (winter, added 2026-06-27). P6 runs year-round and is seasonal (March 0.0406 vs summer 0.0323-0.0363); kept at the summer value since current months are summer. Scalar other_costs_eur_kwh (0.046108) is the FALLBACK for P1 only (P1 has just 133 kWh in the 3-day Feb invoice — needs a fuller winter month). The single scalar over-priced energy ~14%, masked previously by the ksem kWh under-read.",
+      "adjustment_multiplier": 1.015,
+      "other_costs_eur_kwh": 0.046108,
+      "other_costs_eur_kwh_by_period": {
+        "P4": 0.023751,
+        "P5": 0.016746,
+        "P6": 0.022383,
+        "P2": 0.060458,
+        "P3": 0.0373
+      },
+      "loss_coefficient": 0.12,
+      "efficiency_fund_eur_kwh": 0.001,
+      "margin_eur_kwh": 0.00968
+    }
+  },
+  "power_charges_eur_kw_year": {
+    "P1": 20.376927,
+    "P2": 10.617621,
+    "P3": 4.481534,
+    "P4": 3.886333,
+    "P5": 2.513851,
+    "P6": 1.442287
+  },
+  "contracted_power_kw": {
+    "P1": 36.0,
+    "P2": 36.0,
+    "P3": 36.0,
+    "P4": 40.0,
+    "P5": 40.0,
+    "P6": 69.0
+  },
+  "taxes": {
+    "electricity_tax_pct": 5.11269,
+    "electricity_tax_eur_kwh": null,
+    "_electricity_tax_note": "IEE regime is inconsistent month-to-month: standard 5.11269% on Feb, 01-11 Mar and May 2026 invoices; reduced Art 99.2 rate (kWh × 0.001, invoice-stated) only on 12-31 Mar and Apr 2026. Global default is standard percentage mode (electricity_tax_eur_kwh=null) to match the latest invoice and predictive runs; historical reduced months are handled per-period via iee_reduced_periods below.",
+    "iee_reduced_periods": [
+      {
+        "start": "12/03/2026",
+        "end": "31/03/2026",
+        "rate_eur_kwh": 0.001,
+        "_invoice": "FE2600446427"
+      },
+      {
+        "start": "01/04/2026",
+        "end": "30/04/2026",
+        "rate_eur_kwh": 0.001,
+        "_invoice": "FE2600536543"
+      }
+    ],
+    "iva_pct": 21.0
+  },
+  "excess_power_prices_eur_kw": {
+    "_note": "Te_p coefficients for 3.0TD excess-power billing (ORDEN IET/107/2014). P2/P3 taken from invoice FE2600446427. Others are BOE 2024 tariff reference values.",
+    "P1": 2.853164,
+    "P2": 1.757877,
+    "P3": 0.557353,
+    "P4": 0.385522,
+    "P5": 0.096843,
+    "P6": 0.096843
+  },
+  "fixed_charges_eur_day": {
+    "equipment_rental": 1.641863,
+    "bono_social": 0.019121
+  },
+  "injection": {
+    "surplus_type": "omie",
+    "price_eur_kwh": 0.0
+  },
+  "indexed_tariff": {
+    "peajes_eur_kwh": {
+      "P1": 0.027511,
+      "P2": 0.012376,
+      "P3": 0.004943,
+      "P4": 0.002627,
+      "P5": 0.000111,
+      "P6": 3.1e-05
+    },
+    "cargos_eur_kwh": {
+      "P1": 0.035841,
+      "P2": 0.026538,
+      "P3": 0.014336,
+      "P4": 0.007168,
+      "P5": 0.004595,
+      "P6": 0.002867
+    },
+    "margin_comercialitzadora_eur_kwh": 0.00968
+  },
+  "period_hours": {
+    "_comment": "3.0TD Peninsular monthly-rotating scheme (Circular 3/2020 CNMC). Peak/shoulder periods rotate by month group. Night (0-7) + weekends + holidays = P6 always.",
+    "peak_hours": [
+      10,
+      11,
+      12,
+      13,
+      18,
+      19,
+      20,
+      21
+    ],
+    "shoulder_hours": [
+      8,
+      9,
+      14,
+      15,
+      16,
+      17,
+      22,
+      23
+    ],
+    "valley_hours": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7
+    ],
+    "month_groups": {
+      "A": {
+        "months": [
+          1,
+          2,
+          7,
+          12
+        ],
+        "peak": "P1",
+        "shoulder": "P2"
+      },
+      "B": {
+        "months": [
+          3,
+          11
+        ],
+        "peak": "P2",
+        "shoulder": "P3"
+      },
+      "C": {
+        "months": [
+          6,
+          8,
+          9
+        ],
+        "peak": "P3",
+        "shoulder": "P4"
+      },
+      "D": {
+        "months": [
+          4,
+          5,
+          10
+        ],
+        "peak": "P4",
+        "shoulder": "P5"
+      }
+    },
+    "weekend_holiday": "P6"
+  },
+  "investment": {
+    "installation_cost_eur": 50000,
+    "installation_date": "2026-02-26",
+    "expected_lifetime_years": 25,
+    "annual_maintenance_eur": 0,
+    "iberdrola_real_monthly_avg_eur": 2067,
+    "system_kwp": 62,
+    "spec_yield_kwh_per_kwp": 1500,
+    "panel_degradation_pct_year": 0.5
+  },
+  "battery_simulation": {
+    "capacity_kwh": 20,
+    "max_charge_kw": 10,
+    "max_discharge_kw": 10,
+    "round_trip_efficiency": 0.9
+  },
+  "iberdrola_invoices": [
+    {
+      "period": "2025-02",
+      "start": "2025-02-25",
+      "end": "2025-02-28",
+      "amount_eur": 263.03,
+      "days": 3
+    },
+    {
+      "period": "2025-03",
+      "start": "2025-02-28",
+      "end": "2025-03-31",
+      "amount_eur": 2312.64,
+      "days": 31
+    },
+    {
+      "period": "2025-04",
+      "start": "2025-03-31",
+      "end": "2025-04-30",
+      "amount_eur": 1886.06,
+      "days": 30
+    },
+    {
+      "period": "2025-05",
+      "start": "2025-04-30",
+      "end": "2025-05-31",
+      "amount_eur": 2303.96,
+      "days": 31
+    },
+    {
+      "period": "2025-06",
+      "start": "2025-05-31",
+      "end": "2025-06-30",
+      "amount_eur": 2209.04,
+      "days": 30
+    },
+    {
+      "period": "2025-07",
+      "start": "2025-06-30",
+      "end": "2025-07-31",
+      "amount_eur": 2007.28,
+      "days": 31
+    },
+    {
+      "period": "2025-08",
+      "start": "2025-07-31",
+      "end": "2025-08-31",
+      "amount_eur": 1644.44,
+      "days": 31
+    },
+    {
+      "period": "2025-09",
+      "start": "2025-08-31",
+      "end": "2025-09-30",
+      "amount_eur": 1869.11,
+      "days": 30
+    },
+    {
+      "period": "2025-10",
+      "start": "2025-09-30",
+      "end": "2025-10-31",
+      "amount_eur": 1990.66,
+      "days": 31
+    },
+    {
+      "period": "2025-11",
+      "start": "2025-10-31",
+      "end": "2025-11-30",
+      "amount_eur": 2227.44,
+      "days": 30
+    },
+    {
+      "period": "2025-12",
+      "start": "2025-11-30",
+      "end": "2025-12-31",
+      "amount_eur": 2130.47,
+      "days": 31
+    },
+    {
+      "period": "2026-01",
+      "start": "2025-12-31",
+      "end": "2026-01-31",
+      "amount_eur": 2472.95,
+      "days": 31
+    },
+    {
+      "period": "2026-02",
+      "start": "2026-01-31",
+      "end": "2026-02-25",
+      "amount_eur": 1747.58,
+      "days": 25
+    }
+  ],
+  "ev_config": {
+    "enabled": true,
+    "model": "KIA EV9 99.8 kWh",
+    "battery_kwh": 96,
+    "charger_kw": 11,
+    "v2h_kw": 11.5,
+    "efficiency": 0.88,
+    "daily_driving_kwh": 1.3,
+    "home_rate_eur_kwh": 0.19,
+    "charger_cost_eur": 5000,
+    "schedule_arrive": "08:00",
+    "schedule_depart": "18:00",
+    "saturday": true,
+    "sunday": false,
+    "home_battery_kwh": 20,
+    "home_battery_efficiency": 0.9,
+    "aerotermia_cop_heating": 3.0,
+    "aerotermia_cop_cooling": 2.5,
+    "aerotermia_kw": 5,
+    "home_electrical_kwh_night": 5,
+    "heating_months": [
+      1,
+      2,
+      3,
+      11,
+      12
+    ],
+    "cooling_months": [
+      6,
+      7,
+      8,
+      9
+    ]
+  },
+  "scenarios": {
+    "iberdrola": {
+      "name": "Iberdrola Pla Estable",
+      "energy_eur_kwh": {
+        "P1": 0.153962,
+        "P2": 0.153962,
+        "P3": 0.153962,
+        "P4": 0.153962,
+        "P5": 0.153962,
+        "P6": 0.153962
+      },
+      "surplus_eur_kwh": 0.05,
+      "surplus_type": "fixed",
+      "power_charges_eur_kw_day": {
+        "P1": 0.060903,
+        "P2": 0.036886,
+        "P3": 0.017573,
+        "P4": 0.017573,
+        "P5": 0.017573,
+        "P6": 0.006065
+      },
+      "contracted_power_kw": {
+        "P1": 36.0,
+        "P2": 36.0,
+        "P3": 36.0,
+        "P4": 40.0,
+        "P5": 40.0,
+        "P6": 69.0
+      }
+    },
+    "som_periodes": {
+      "name": "Som Energia Períodes",
+      "energy_eur_kwh": {
+        "P1": 0.176,
+        "P2": 0.154,
+        "P3": 0.129,
+        "P4": 0.123,
+        "P5": 0.125,
+        "P6": 0.118
+      },
+      "surplus_eur_kwh": 0.03,
+      "surplus_type": "fixed",
+      "power_charges_eur_kw_year": {
+        "P1": 20.376927,
+        "P2": 10.617621,
+        "P3": 4.481534,
+        "P4": 3.886333,
+        "P5": 2.513851,
+        "P6": 1.442287
+      }
+    },
+    "holaluz": {
+      "name": "Holaluz Fix",
+      "energy_eur_kwh": {
+        "P1": 0.163437,
+        "P2": 0.140197,
+        "P3": 0.120017,
+        "P4": 0.113347,
+        "P5": 0.111597,
+        "P6": 0.110027
+      },
+      "surplus_eur_kwh": 0.05,
+      "surplus_type": "fixed",
+      "power_charges_eur_kw_day": {
+        "P1": 0.061855,
+        "P2": 0.035665,
+        "P3": 0.018854,
+        "P4": 0.017223,
+        "P5": 0.013737,
+        "P6": 0.011075
+      }
+    },
+    "som_indexada": {
+      "name": "Som Energia Indexada + Flux Solar",
+      "margin_eur_kwh": 0.00968,
+      "surplus_type": "omie",
+      "contract_formula": {
+        "_comment": "PH = mult × [(OMIE + other_costs) × (1 + losses) + FE + margin] + PTD + CA",
+        "adjustment_multiplier": 1.015,
+        "other_costs_eur_kwh": 0.046108,
+        "loss_coefficient": 0.12,
+        "efficiency_fund_eur_kwh": 0.001,
+        "other_costs_eur_kwh_by_period": {
+          "P2": 0.060458,
+          "P3": 0.0373,
+          "P4": 0.023751,
+          "P6": 0.022383
+        }
+      },
+      "power_charges_eur_kw_year": {
+        "P1": 20.376927,
+        "P2": 10.617621,
+        "P3": 4.481534,
+        "P4": 3.886333,
+        "P5": 2.513851,
+        "P6": 1.442287
+      },
+      "flux_solar": {
+        "enabled": false,
+        "credit_pct": 0.8
+      }
+    }
+  },
+  "solar_forecast": {
+    "_comment": "PV production-forecast geometry (feeds /previsio-solar + /programador). model: 'v2' = geometry+temp-corrected MULTI-ARRAY, 'legacy' = original due-south. azimuth_deg is OPEN-METEO convention (0=south, NEGATIVE=east, POSITIVE=west). The plant has TWO differently-oriented arrays, so v2 sums one plane per array (see 'arrays'); the top-level tilt/azimuth are only the single-plane fallback. Refit 2026-07-04 per inverter via pvlib (dashboard/tools/fit_solar_geometry.py): CI-50 ~12 deg EAST/tilt 35 (peaks ~13:15), PIKO-15 ~15 deg WEST/tilt 18 (low-tilt afternoon plateau, peaks ~15:00). Per-array kWp calibrated so modelled clear-day energy matches measured (CI-50 ~228 kWh, PIKO-15 ~104 kWh). The prior single CI-50-only geometry over-predicted morning and cut the evening tail short, skewing /programador start times early.",
+    "model": "v2",
+    "lat": 42.12,
+    "lon": 3.13,
+    "kwp_nameplate": 65.0,
+    "tilt_deg": 35,
+    "azimuth_deg": -12,
+    "temp_coeff_per_c": -0.0035,
+    "noct_c": 45,
+    "rated_efficiency": 0.8,
+    "low_light_knee_w": 500.0,
+    "low_light_exp": 0.4,
+    "arrays": [
+      {
+        "name": "ci50",
+        "inverter": "piko_ci_50",
+        "tilt_deg": 35,
+        "azimuth_deg": -12,
+        "kwp": 44.0
+      },
+      {
+        "name": "piko15",
+        "inverter": "piko_15",
+        "tilt_deg": 18,
+        "azimuth_deg": 15,
+        "kwp": 18.0
+      }
+    ],
+    "fitted_on": "2026-07-04",
+    "fit_days_ci50": [
+      "2026-05-26",
+      "2026-05-27",
+      "2026-05-28",
+      "2026-05-29",
+      "2026-05-31",
+      "2026-06-11",
+      "2026-06-14",
+      "2026-06-16",
+      "2026-06-17",
+      "2026-06-22",
+      "2026-06-26",
+      "2026-06-27",
+      "2026-06-30",
+      "2026-07-01"
+    ],
+    "fit_days_piko15": [
+      "2026-04-23",
+      "2026-04-28",
+      "2026-05-28",
+      "2026-05-29",
+      "2026-05-30",
+      "2026-06-12",
+      "2026-06-16",
+      "2026-06-17",
+      "2026-06-22",
+      "2026-06-24",
+      "2026-06-30",
+      "2026-07-01",
+      "2026-07-02",
+      "2026-07-03"
+    ]
+  },
+  "ksem_calibration": {
+    "factors": {
+      "P1": 1.0916,
+      "P2": 1.1271,
+      "P3": 1.0828,
+      "P4": 1.1019,
+      "P5": 0.9566,
+      "P6": 1.192
+    },
+    "overall": 1.1242,
+    "total_calibration_kwh": 5987.0,
+    "matched_hours": 1175,
+    "period": "2026-06-01 to 2026-07-19",
+    "last_updated": "2026-07-20",
+    "_note": "Auto-calibrated from official hourly meter data (infoenergia CSV).",
+    "_p5_note": "P5 preservat de la calibracio abril+maig (FE2600536543/FE2600698309): juny (grup C) i juliol (grup A) no contenen hores P5."
+  },
+  "calibration_history": [
+    {
+      "date": "2026-03-19",
+      "period": "2026-03-01 to 2026-03-11",
+      "ksem_overall": 1.115,
+      "ksem_factors": {
+        "P1": null,
+        "P2": 1.12,
+        "P3": 1.1032,
+        "P4": null,
+        "P5": null,
+        "P6": 1.1189
+      },
+      "matched_hours": 234,
+      "total_kwh": 1885.0,
+      "other_costs": 0.046108,
+      "from_invoice": "FE2600318459.pdf"
+    },
+    {
+      "date": "2026-07-20",
+      "period": "2026-06-01 to 2026-07-19",
+      "ksem_overall": 1.1242,
+      "ksem_factors": {
+        "P1": 1.0916,
+        "P2": 1.1271,
+        "P3": 1.0828,
+        "P4": 1.1019,
+        "P5": null,
+        "P6": 1.192
+      },
+      "matched_hours": 1175,
+      "total_kwh": 5987.0
+    }
+  ]
+}
